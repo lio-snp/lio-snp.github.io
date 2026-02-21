@@ -6,7 +6,7 @@ import rehypeKatex from 'rehype-katex';
 import { fileURLToPath } from 'node:url';
 
 export default defineConfig({
-  site: 'https://liosnp.github.io',
+  site: 'https://lio-snp.github.io',
   integrations: [mdx(), sitemap()],
   vite: {
     resolve: {
