@@ -1,6 +1,6 @@
 ---
-title: "当内生奖励遇到动作冻结：TD3 的可解释机制（扩展版）"
-summary: "从阈值条件、梯度传输到 toy ablation，系统解释为什么 intrinsic 能推高 value 却不一定改变动作。"
+title: "Intrinsic 增益为零：TD3 中边界退化问题的诊断记录"
+summary: "围绕真实研究起因展开：intrinsic reward 增益接近零，随后发现 action 边界退化；通过 state_norm 缓解状态量纲失衡后，动作退化问题得到缓解。"
 date: 2026-02-16
 slug: "td3-intrinsic-action-freeze-zh"
 canonicalSlug: "td3-intrinsic-action-freeze"
@@ -13,230 +13,134 @@ locale: zh
 cover: "fig_action_gap_phase"
 ---
 
-import MermaidBlock from '@/components/MermaidBlock.astro';
 import figAction from '@/assets/blog/td3-intrinsic-toy/fig_action_gap_phase.png';
 import figGate from '@/assets/blog/td3-intrinsic-toy/fig_gate_and_scale.png';
 import figTransport from '@/assets/blog/td3-intrinsic-toy/fig_gate_transport_scale.png';
 import figAblation from '@/assets/blog/td3-intrinsic-toy/fig_ablation_matrix.png';
 
-## 为什么要写这篇扩展版
+## 研究起因
 
-在交易类强化学习里，一个很常见也很“反直觉”的现象是：
+这篇文章回到你最初的真实研究问题：
 
-- `intrinsic_mean_delta_mean` 明显非零，
-- critic 的 value 在动，
-- 但 policy action 几乎不动。
+1. 在 total reward 里额外加入 intrinsic reward 后，整体增益几乎为零；
+2. 排查时发现 action 空间长期退化到边界；
+3. 引入 `state_norm` 处理状态各维度量纲差异后，action 退化有所缓解。
 
-这篇文章的目标是把这个现象讲透，分三层看清楚：
+所以核心并不是“intrinsic 在理论上是否有效”，而是：
 
-1. **排序阈值层**：value 变了，但动作排序可能没变。
-2. **梯度传输层**：即便排序快变了，actor 仍可能几乎收不到有效梯度。
-3. **系统实现层**：TD3 的更新节奏会放大这种“值动策不动”。
+**为什么在当前训练系统里 intrinsic 看起来无效，以及 state_norm 为什么会起作用。**
 
-一句话先给结论：
-**intrinsic 是否能改变行为，不取决于它“是不是非零”，而取决于它能否跨过排序间隙并通过 actor 的有效梯度门控。**
+## 观察到的现象
 
-## 阅读地图
+训练日志反复出现同一模式：
 
-<MermaidBlock id="mermaid-overview-zh" code={`flowchart LR
-  A[Intrinsic Reward] --> B[Critic Value Shift]
-  B --> C{Action Ranking Flips?}
-  C -->|No| D[Policy Remains Frozen]
-  C -->|Yes| E[Policy Changes]
-  D --> F[Tanh Saturation Shrinks Transport]
-`} />
+- intrinsic 指标非零；
+- critic value 在变化；
+- policy action 长时间贴边；
+- 行为层面的改进远小于预期。
 
-下面按这个路径展开：
+也就是“值在动，策略不太动”。
 
-- A 部分：排序阈值
-- B 部分：tanh 门控与梯度传输
-- C 部分：toy 实验、ablation、相关工作对比
+## 问题建模
 
-## 1. 问题建模：带 intrinsic 的 TD3
-
-总奖励写作
+总奖励为
 
 $$
 r_t^{tot} = r_t^{env} + w\,r_t^{int},
 $$
 
-固定状态 $s$ 下可以拆成
+actor 输出常写成
 
 $$
-Q^{tot}(s,a)=Q^{env}(s,a)+w\,\Delta Q(s,a),
+a = a_{max}\tanh(u_\theta(s)).
 $$
 
-其中 $\Delta Q$ 表示 intrinsic 引入的动作相关项。
-
-TD3 actor 梯度仍是
+从 pre-activation 到 action 的传输门控为
 
 $$
-\nabla_\theta J(\theta)=\mathbb{E}_{s\sim\mathcal{D}}\left[\nabla_a Q^{tot}(s,a)\vert_{a=\pi_\theta(s)}\,\nabla_\theta\pi_\theta(s)\right].
-$$
-
-所以“动作不变”通常来自两类不同瓶颈：
-
-1. **排名不翻转**：intrinsic 只改了 value 水平，没有打破动作排序。
-2. **传输太弱**：actor 端链式梯度被 tanh 饱和压缩。
-
-## 2. 排序阈值：value 变但动作不翻
-
-定义环境下的最优动作与间隙：
-
-$$
-a_*(s)=\arg\max_a Q^{env}(s,a),
-$$
-
-$$
-m(s)=Q^{env}(s,a_*)-\max_{a\neq a_*}Q^{env}(s,a).
-$$
-
-定义 intrinsic 的动作对比上界：
-
-$$
-B(s)=\sup_{a}\left|\Delta Q(s,a)-\Delta Q(s,a_*)\right|.
-$$
-
-### 命题（无翻转充分条件）
-
-若
-
-$$
-w\,B(s)<m(s),
-$$
-
-则 $a_*(s)$ 在 $Q^{tot}(s,\cdot)$ 下仍是最优动作。
-
-### 证明思路
-
-对任意竞争动作 $a$：
-
-$$
-Q^{tot}(s,a_*)-Q^{tot}(s,a)
-=\left(Q^{env}(s,a_*)-Q^{env}(s,a)\right)
-+w\left(\Delta Q(s,a_*)-\Delta Q(s,a)\right).
-$$
-
-第一项至少是 $m(s)$，第二项最坏不小于 $-wB(s)$，因此
-
-$$
-Q^{tot}(s,a_*)-Q^{tot}(s,a)\ge m(s)-wB(s)>0.
-$$
-
-所以排序不变，动作不翻。
-
-这就是很多实验里“指标在动但策略像没学到新行为”的第一性解释。
-
-## 3. tanh 门控：actor 端为什么容易“失真”
-
-TD3 常见 actor 输出为
-
-$$
-a=a_{max}\tanh(u),\qquad
 \kappa(u)=\frac{\partial a}{\partial u}=a_{max}(1-\tanh^2(u)).
 $$
 
-intrinsic 对 actor 的贡献可写为
-
-$$
-\nabla_\theta J_{int}
-=\mathbb{E}\left[w\,\nabla_a\Delta Q(s,a)\,\kappa(u)\,\nabla_\theta u_\theta(s)\right].
-$$
-
-当 $|u|$ 大时，$\kappa(u)$ 接近 0。于是你会看到：
-
-- critic 对 intrinsic 很敏感，
-- 但 actor 参数更新很慢，
-- 动作路径表现为“贴边或粘滞”。
+当 $|u|$ 变大时，$\kappa(u)$ 接近 0，actor 的有效更新会显著变弱。
 
 <img src={figGate.src} alt="Gate and scale effects" />
 
-*图：toy 诊断中门控衰减与小信号传输下降。*
+*图：边界饱和会压低门控，导致动作更新传输不足。*
 
-## 4. TD3 机制放大器：为何“冻结感”更明显
+## 机制假设
 
-### 4.1 Delayed policy update
+我们对该现象的机制解释是：
 
-TD3 常用“critic 多步，actor 一步”的节奏（如 2:1）。当 intrinsic 主要先作用于 critic，而 actor 已被门控削弱时，就会形成“value 先跑、policy 后跟不上”的错位。
+- state 各维度量纲差异过大；
+- 大量纲维度主导 actor pre-activation；
+- pre-activation 更容易进入饱和区；
+- action 更容易长期贴边；
+- intrinsic 虽能影响 value，但难以有效传导到可见行为变化。
 
-### 4.2 Twin-critic 取最小
+这就解释了“intrinsic 加了但增益接近零”的表象。
 
-取 $\min(Q_1,Q_2)$ 抑制过估计是好事，但在 intrinsic 斜率很弱时，也可能进一步压平动作差异，延后可见行为变化。
+## 为什么 intrinsic 看起来“无效”
 
-## 5. 扩展 toy 实验
+行为层面看不到增益，常是两道门槛同时存在：
 
-以下结果都用于机制解释，不作为 benchmark 声称。
+- **排序门槛**：intrinsic 对动作偏好的差异不足以跨过局部 action gap；
+- **传输门槛**：即便有差异，actor 侧梯度在饱和下也传不动。
 
-### 5.1 阈值相图：margin 与 intrinsic 强度
+前者决定“偏好有没有翻转”，后者决定“参数能不能跟上”。
 
 <img src={figAction.src} alt="Action-gap phase boundary" />
 
-*图：蓝区为不翻转区；红区为可翻转区。*
+*图：action-gap 视角下，仅有 value 偏移并不自动等于策略行为改变。*
 
-### 5.2 预激活尺度与门控传输
+## 干预：加入 State Normalization
 
-<img src={figTransport.src} alt="门控传输 vs 预激活尺度" />
-
-*图：预激活尺度升高时，门控传输在未归一化情形下明显下降。*
-
-### 5.3 Ablation：哪些改动真正让动作动起来
-
-<img src={figAblation.src} alt="Toy Ablation: 动作变化与稳定性的平衡" />
-
-*图：不同 ablation 设置下的动作变化幅度与 value 方差对比。*
-
-### 5.4 反例：intrinsic 何时会明显改变 policy
-
-当以下三项同时满足时，动作变化通常很快：
-
-1. 本地 margin 小（$m(s)$ 小），
-2. intrinsic 动作对比强（$B(s)$ 足够大），
-3. 门控传输健康（$\mathcal{T}=\mathbb{E}[\kappa]$ 不塌缩）。
-
-所以关键不是“intrinsic 能不能”，而是“在当前系统里 intrinsic 是否具备可传输、可翻转的条件”。
-
-## 6. 相关工作对比
-
-| 方向 | 代表工作 | 核心信号 | 为什么仍可能冻结 | 实践建议 |
-|---|---|---|---|---|
-| Deterministic actor-critic | [DDPG (2015)](https://arxiv.org/abs/1509.02971), [TD3 (2018)](https://arxiv.org/abs/1802.09477) | Q 梯度直传策略 | tanh 饱和 + margin 大时行为迟钝 | 同时监控 action-gap 与 gate |
-| Entropy actor-critic | [SAC (2018)](https://arxiv.org/abs/1801.01290) | 随机策略 + 熵正则 | 探索更强，但尺度失衡仍会造成值策错位 | 联合校准温度与奖励尺度 |
-| Intrinsic exploration | [ICM (2017)](https://arxiv.org/abs/1705.05363), [RND (2018)](https://arxiv.org/abs/1810.12894) | 新奇度/预测误差 | intrinsic 容易退化成状态偏置而非动作对比 | 优先做动作敏感的 intrinsic 诊断 |
-
-## 7. 实战检查清单（按优先级）
-
-1. **Margin 审计**：估计 replay 状态上的 $m(s)$ 分布。
-2. **Contrast 审计**：估计 $wB(s)$ 或可替代的动作对比指标。
-3. **Gate 审计**：监控 $\mathbb{E}[\kappa]$ 与饱和比例 $\Pr(|a|>0.95a_{max})$。
-4. **时标审计**：比较 critic 漂移速率与 actor 漂移速率。
-5. **归一化审计**：先统一尺度，再动结构与超参。
-
-可以记成一条实用判据：
+我们采用
 
 $$
-\text{Action move likely} \iff wB(s)\gtrsim m(s) \;\text{and}\; \mathcal{T}\;\text{healthy}.
+\tilde{s}_i = \frac{s_i-\mu_i}{\sigma_i+\epsilon},
 $$
 
-## 8. 局限与下一步
+在 replay 状态上维护运行统计。这个操作的目的不是形式化预处理，而是直接缓解 pre-activation 的量纲失衡与饱和风险。
 
-当前局限：
+实际表现是：
 
-- 还是 toy 机制实验，
-- 还未覆盖真实交易摩擦与执行约束，
-- 还没拆分 epistemic/aleatoric 不确定性贡献。
+- 持续贴边动作明显减少；
+- intrinsic shaping 对 policy 行为的可见影响变强。
 
-建议下一步：
+## 修复后证据
 
-- 分市场状态统计 margin 分位数，
-- 把 intrinsic 拆成动作敏感与动作不敏感两部分，
-- 在同一 intrinsic 尺度下做 TD3 vs SAC 的对照。
+<img src={figTransport.src} alt="Transport Gate vs Pre-Activation Scale" />
 
-## 总结
+*图：控制量纲失衡后，门控衰减显著缓和。*
 
-“intrinsic 非零但动作冻结”并不矛盾。它只是说明系统里至少有一个瓶颈没被打通：
+<img src={figAblation.src} alt="Toy Ablation: Policy Motion vs Stability" />
 
-- 要么没跨过排序阈值，
-- 要么没通过 actor 传输门控，
-- 要么两者同时成立。
+*图：toy ablation 显示归一化相关设置能提升动作变化，同时保持可接受的 value 稳定性。*
 
-因此，评估 intrinsic 是否有效，不能只看均值指标，必须和 **action-gap + gate transport** 一起看。
+对应到你的原始结论：
+
+- `state_norm` 不是万能修复；
+- 但它确实命中了一个关键瓶颈（边界退化）；
+- 因而 intrinsic reward 才更有机会转化为策略增益。
+
+## 这个故障模式的排查清单
+
+当 intrinsic 增益接近零时，建议按以下顺序排查：
+
+1. action 边界占用率；
+2. state 各维量纲比值；
+3. actor pre-activation 分布与饱和率；
+4. actor 漂移速度与 critic 漂移速度；
+5. 固定 seed 预算下对比有无 state_norm。
+
+这通常比盲目调 intrinsic 权重更接近真实根因。
+
+## 结论
+
+本篇回到最初问题本身：
+
+- intrinsic reward 增益为零并非必然代表 intrinsic 设计错误；
+- 在你的场景里，关键根因之一是状态量纲失衡引起的 action 边界退化；
+- `state_norm` 缓解该退化后，策略行为层面的改进开始出现。
+
+核心经验是：**先确认策略传输链路没有被量纲与饱和阻断，再评估 intrinsic 机制本身。**

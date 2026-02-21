@@ -26,7 +26,7 @@ const { title } = Astro.props;
       details.removeAttribute('open');
     }
 
-    const headings = [...document.querySelectorAll('article h2, article h3')];
+    const headings = [...document.querySelectorAll('article h2')];
     const headingById = new Map();
     list.innerHTML = '';
 
@@ -47,7 +47,6 @@ const { title } = Astro.props;
       link.href = `#${heading.id}`;
       link.textContent = heading.textContent || '';
       link.setAttribute('data-toc-link', heading.id);
-      if (heading.tagName === 'H3') link.classList.add('toc-sub');
       li.appendChild(link);
       list.appendChild(li);
     });
