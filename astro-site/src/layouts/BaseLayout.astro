@@ -47,14 +47,17 @@ const { title, description, locale, currentPath, alternatePath } = Astro.props;
       const currentLocale = body.dataset.currentLocale;
       const currentPath = body.dataset.currentPath || '/';
       const altPath = body.dataset.altPath || '/';
-      const saved = localStorage.getItem('site_lang');
+      const defaultLocale = 'en';
+      const savedRaw = localStorage.getItem('site_lang');
+      const saved = savedRaw === 'zh' || savedRaw === 'en' ? savedRaw : null;
+      const preferredLocale = saved || defaultLocale;
 
       if (!saved) {
-        localStorage.setItem('site_lang', currentLocale || 'zh');
+        localStorage.setItem('site_lang', preferredLocale);
       }
 
       const isRootPair = currentPath === '/' || currentPath === '/en/';
-      if (isRootPair && saved && currentLocale && saved !== currentLocale) {
+      if (isRootPair && currentLocale && preferredLocale !== currentLocale) {
         window.location.replace(altPath);
       }
 
@@ -79,11 +82,25 @@ const { title, description, locale, currentPath, alternatePath } = Astro.props;
           },
           {
             rootMargin: '0px 0px -9% 0px',
-            threshold: 0.18
+            threshold: 0.01
           }
         );
 
-        revealNodes.forEach((node) => observer.observe(node));
+        const revealImmediatelyIfVisible = (node) => {
+          const rect = node.getBoundingClientRect();
+          const visibleNow = rect.top < window.innerHeight * 0.96 && rect.bottom > 0;
+          if (visibleNow) {
+            node.classList.add('revealed');
+            return true;
+          }
+          return false;
+        };
+
+        revealNodes.forEach((node) => {
+          if (!revealImmediatelyIfVisible(node)) {
+            observer.observe(node);
+          }
+        });
       }
     </script>
   </body>
