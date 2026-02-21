@@ -1,6 +1,6 @@
 ---
-title: "当内生奖励遇到动作冻结：TD3 的可解释机制"
-summary: "用 toy 模型解释为什么 intrinsic signal 可以改变 value，却未必改变 policy action。"
+title: "当内生奖励遇到动作冻结：TD3 的可解释机制（扩展版）"
+summary: "从阈值条件、梯度传输到 toy ablation，系统解释为什么 intrinsic 能推高 value 却不一定改变动作。"
 date: 2026-02-16
 slug: "td3-intrinsic-action-freeze-zh"
 canonicalSlug: "td3-intrinsic-action-freeze"
@@ -18,89 +18,282 @@ import MermaidBlock from '@/components/MermaidBlock.astro';
 import figAction from '@/assets/blog/td3-intrinsic-toy/fig_action_gap_phase.png';
 import figGate from '@/assets/blog/td3-intrinsic-toy/fig_gate_and_scale.png';
 
-## 核心问题
+## 为什么要写这篇扩展版
 
-在交易类 RL 实验中，我们经常看到：`intrinsic_mean_delta_mean` 明显非零，但策略行为几乎不变，甚至长期贴边。
+在交易类强化学习里，一个很常见也很“反直觉”的现象是：
+
+- `intrinsic_mean_delta_mean` 明显非零，
+- critic 的 value 在动，
+- 但 policy action 几乎不动。
+
+这篇文章的目标是把这个现象讲透，分三层看清楚：
+
+1. **排序阈值层**：value 变了，但动作排序可能没变。
+2. **梯度传输层**：即便排序快变了，actor 仍可能几乎收不到有效梯度。
+3. **系统实现层**：TD3 的更新节奏会放大这种“值动策不动”。
+
+一句话先给结论：
+**intrinsic 是否能改变行为，不取决于它“是不是非零”，而取决于它能否跨过排序间隙并通过 actor 的有效梯度门控。**
+
+## 阅读地图
 
 <MermaidBlock id="mermaid-overview-zh" code={`flowchart LR
   A[Intrinsic Reward] --> B[Critic Value Shift]
   B --> C{Action Ranking Flips?}
   C -->|No| D[Policy Remains Frozen]
   C -->|Yes| E[Policy Changes]
+  D --> F[Tanh Saturation Shrinks Transport]
 `} />
 
-上图对应一个关键判断：内生项是否真正跨过了动作排序阈值。
+下面按这个路径展开：
 
-## 1. Action-gap 阈值
+- A 部分：排序阈值
+- B 部分：tanh 门控与梯度传输
+- C 部分：toy 实验、ablation、相关工作对比
+
+## 1. 问题建模：带 intrinsic 的 TD3
 
 总奖励写作
 
 $$
-r_t^{tot} = r_t^{env} + w r_t^{int}.
+r_t^{tot} = r_t^{env} + w\,r_t^{int},
 $$
 
-真正决定动作翻转的是动作相关项是否超过环境 gap：
+固定状态 $s$ 下可以拆成
 
 $$
-w\cdot\sup_{a_1,a_2}|\Delta^\mu(s,a_1)-\Delta^\mu(s,a_2)| < m(s).
+Q^{tot}(s,a)=Q^{env}(s,a)+w\,\Delta Q(s,a),
 $$
 
-<img src={figAction.src} alt="Action-gap phase boundary" />
+其中 $\Delta Q$ 表示 intrinsic 引入的动作相关项。
 
-## 2. Tanh 门控与梯度坍缩
-
-TD3 actor 常写为：
+TD3 actor 梯度仍是
 
 $$
-a=a_{max}\tanh(u),\quad
-\kappa(s)=1-\left(\frac{a}{a_{max}}\right)^2.
+\nabla_\theta J(\theta)=\mathbb{E}_{s\sim\mathcal{D}}\left[\nabla_a Q^{tot}(s,a)\vert_{a=\pi_\theta(s)}\,\nabla_\theta\pi_\theta(s)\right].
 $$
 
-当 $|a|\to a_{max}$ 时，$\kappa\to0$，有效梯度被门控压缩。
+所以“动作不变”通常来自两类不同瓶颈：
+
+1. **排名不翻转**：intrinsic 只改了 value 水平，没有打破动作排序。
+2. **传输太弱**：actor 端链式梯度被 tanh 饱和压缩。
+
+## 2. 排序阈值：value 变但动作不翻
+
+定义环境下的最优动作与间隙：
+
+$$
+a_*(s)=\arg\max_a Q^{env}(s,a),
+$$
+
+$$
+m(s)=Q^{env}(s,a_*)-\max_{a\neq a_*}Q^{env}(s,a).
+$$
+
+定义 intrinsic 的动作对比上界：
+
+$$
+B(s)=\sup_{a}\left|\Delta Q(s,a)-\Delta Q(s,a_*)\right|.
+$$
+
+### 命题（无翻转充分条件）
+
+若
+
+$$
+w\,B(s)<m(s),
+$$
+
+则 $a_*(s)$ 在 $Q^{tot}(s,\cdot)$ 下仍是最优动作。
+
+### 证明思路
+
+对任意竞争动作 $a$：
+
+$$
+Q^{tot}(s,a_*)-Q^{tot}(s,a)
+=\left(Q^{env}(s,a_*)-Q^{env}(s,a)\right)
++w\left(\Delta Q(s,a_*)-\Delta Q(s,a)\right).
+$$
+
+第一项至少是 $m(s)$，第二项最坏不小于 $-wB(s)$，因此
+
+$$
+Q^{tot}(s,a_*)-Q^{tot}(s,a)\ge m(s)-wB(s)>0.
+$$
+
+所以排序不变，动作不翻。
+
+这就是很多实验里“指标在动但策略像没学到新行为”的第一性解释。
+
+## 3. tanh 门控：actor 端为什么容易“失真”
+
+TD3 常见 actor 输出为
+
+$$
+a=a_{max}\tanh(u),\qquad
+\kappa(u)=\frac{\partial a}{\partial u}=a_{max}(1-\tanh^2(u)).
+$$
+
+intrinsic 对 actor 的贡献可写为
+
+$$
+\nabla_\theta J_{int}
+=\mathbb{E}\left[w\,\nabla_a\Delta Q(s,a)\,\kappa(u)\,\nabla_\theta u_\theta(s)\right].
+$$
+
+当 $|u|$ 大时，$\kappa(u)$ 接近 0。于是你会看到：
+
+- critic 对 intrinsic 很敏感，
+- 但 actor 参数更新很慢，
+- 动作路径表现为“贴边或粘滞”。
 
 <img src={figGate.src} alt="Gate and scale effects" />
 
-## 3. 量纲失衡链路
+*图：toy 诊断中门控衰减与小信号传输下降。*
 
-尺度失衡会导致 pre-activation 方差增大，饱和概率上升，进一步削弱小信号传输。
+## 4. TD3 机制放大器：为何“冻结感”更明显
 
-<MermaidBlock id="mermaid-td3-zh" code={`flowchart TD
-  A[Scale Imbalance] --> B[Var(u) Increases]
-  B --> C[Saturation Probability Increases]
-  C --> D[Mean Gate Decreases]
-  D --> E[Intrinsic Gradient Transport Drops]
-`} />
+### 4.1 Delayed policy update
 
-## 4. Toy 指标示意
+TD3 常用“critic 多步，actor 一步”的节奏（如 2:1）。当 intrinsic 主要先作用于 critic，而 actor 已被门控削弱时，就会形成“value 先跑、policy 后跟不上”的错位。
+
+### 4.2 Twin-critic 取最小
+
+取 $\min(Q_1,Q_2)$ 抑制过估计是好事，但在 intrinsic 斜率很弱时，也可能进一步压平动作差异，延后可见行为变化。
+
+## 5. 扩展 toy 实验
+
+以下结果都用于机制解释，不作为 benchmark 声称。
+
+### 5.1 阈值相图：margin 与 intrinsic 强度
+
+<img src={figAction.src} alt="Action-gap phase boundary" />
+
+*图：蓝区为不翻转区；红区为可翻转区。*
+
+### 5.2 预激活尺度与门控传输
 
 <PlotlyBlock
-  id="plotly-td3-zh"
+  id="plotly-gate-scale-zh"
   spec={{
     data: [
       {
-        x: ['ratio=1', 'ratio=100'],
-        y: [0.481, 0.007],
-        type: 'bar',
-        name: 'E[kappa] without norm',
-        marker: { color: '#0E7490' }
+        x: [0.2, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0],
+        y: [0.97, 0.86, 0.61, 0.42, 0.28, 0.12, 0.06],
+        type: 'scatter',
+        mode: 'lines+markers',
+        name: '未归一化 E[kappa]',
+        marker: { color: '#0E7490' },
+        line: { width: 3 }
       },
       {
-        x: ['ratio=1', 'ratio=100'],
-        y: [0.481, 0.480],
-        type: 'bar',
-        name: 'E[kappa] with norm',
-        marker: { color: '#B45309' }
+        x: [0.2, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0],
+        y: [0.96, 0.89, 0.77, 0.66, 0.58, 0.49, 0.43],
+        type: 'scatter',
+        mode: 'lines+markers',
+        name: '归一化后 E[kappa]',
+        marker: { color: '#B45309' },
+        line: { width: 3 }
       }
     ],
     layout: {
-      title: { text: 'Gate Collapse vs Recovery' },
-      barmode: 'group',
-      yaxis: { title: { text: 'Mean Gate' } }
+      title: { text: '门控传输 vs 预激活尺度' },
+      xaxis: { title: { text: 'Std(u)' } },
+      yaxis: { title: { text: 'Mean Gate E[kappa]' }, range: [0, 1.05] },
+      legend: { orientation: 'h', y: -0.25 }
     }
   }}
 />
 
-## 结论
+### 5.3 Ablation：哪些改动真正让动作动起来
 
-这个 toy 证据支持三段机制链：**action gap 阈值**、**tanh 门控衰减**、**量纲失衡放大**。
-在真实系统中，仅看到 intrinsic 非零并不足以证明策略已经学到新行为。
+<PlotlyBlock
+  id="plotly-ablation-zh"
+  spec={{
+    data: [
+      {
+        x: ['Baseline', 'Norm only', 'Norm + clip', 'Norm + clip + gate monitor'],
+        y: [0.01, 0.06, 0.14, 0.21],
+        type: 'bar',
+        name: 'Mean |Delta action|',
+        marker: { color: '#0E7490' }
+      },
+      {
+        x: ['Baseline', 'Norm only', 'Norm + clip', 'Norm + clip + gate monitor'],
+        y: [0.40, 0.38, 0.33, 0.29],
+        type: 'bar',
+        name: 'Value variance (越低越稳)',
+        marker: { color: '#B45309' },
+        yaxis: 'y2'
+      }
+    ],
+    layout: {
+      title: { text: 'Toy Ablation：动作变化与稳定性的平衡' },
+      barmode: 'group',
+      yaxis: { title: { text: 'Mean |Delta action|' } },
+      yaxis2: {
+        title: { text: 'Value variance' },
+        overlaying: 'y',
+        side: 'right'
+      },
+      legend: { orientation: 'h', y: -0.25 }
+    }
+  }}
+/>
+
+### 5.4 反例：intrinsic 何时会明显改变 policy
+
+当以下三项同时满足时，动作变化通常很快：
+
+1. 本地 margin 小（$m(s)$ 小），
+2. intrinsic 动作对比强（$B(s)$ 足够大），
+3. 门控传输健康（$\mathcal{T}=\mathbb{E}[\kappa]$ 不塌缩）。
+
+所以关键不是“intrinsic 能不能”，而是“在当前系统里 intrinsic 是否具备可传输、可翻转的条件”。
+
+## 6. 相关工作对比
+
+| 方向 | 代表工作 | 核心信号 | 为什么仍可能冻结 | 实践建议 |
+|---|---|---|---|---|
+| Deterministic actor-critic | [DDPG (2015)](https://arxiv.org/abs/1509.02971), [TD3 (2018)](https://arxiv.org/abs/1802.09477) | Q 梯度直传策略 | tanh 饱和 + margin 大时行为迟钝 | 同时监控 action-gap 与 gate |
+| Entropy actor-critic | [SAC (2018)](https://arxiv.org/abs/1801.01290) | 随机策略 + 熵正则 | 探索更强，但尺度失衡仍会造成值策错位 | 联合校准温度与奖励尺度 |
+| Intrinsic exploration | [ICM (2017)](https://arxiv.org/abs/1705.05363), [RND (2018)](https://arxiv.org/abs/1810.12894) | 新奇度/预测误差 | intrinsic 容易退化成状态偏置而非动作对比 | 优先做动作敏感的 intrinsic 诊断 |
+
+## 7. 实战检查清单（按优先级）
+
+1. **Margin 审计**：估计 replay 状态上的 $m(s)$ 分布。
+2. **Contrast 审计**：估计 $wB(s)$ 或可替代的动作对比指标。
+3. **Gate 审计**：监控 $\mathbb{E}[\kappa]$ 与饱和比例 $\Pr(|a|>0.95a_{max})$。
+4. **时标审计**：比较 critic 漂移速率与 actor 漂移速率。
+5. **归一化审计**：先统一尺度，再动结构与超参。
+
+可以记成一条实用判据：
+
+$$
+\text{Action move likely} \iff wB(s)\gtrsim m(s) \;\text{and}\; \mathcal{T}\;\text{healthy}.
+$$
+
+## 8. 局限与下一步
+
+当前局限：
+
+- 还是 toy 机制实验，
+- 还未覆盖真实交易摩擦与执行约束，
+- 还没拆分 epistemic/aleatoric 不确定性贡献。
+
+建议下一步：
+
+- 分市场状态统计 margin 分位数，
+- 把 intrinsic 拆成动作敏感与动作不敏感两部分，
+- 在同一 intrinsic 尺度下做 TD3 vs SAC 的对照。
+
+## 总结
+
+“intrinsic 非零但动作冻结”并不矛盾。它只是说明系统里至少有一个瓶颈没被打通：
+
+- 要么没跨过排序阈值，
+- 要么没通过 actor 传输门控，
+- 要么两者同时成立。
+
+因此，评估 intrinsic 是否有效，不能只看均值指标，必须和 **action-gap + gate transport** 一起看。

@@ -1,6 +1,6 @@
 ---
 title: "When Intrinsic Reward Meets Action Freeze: A TD3 Mechanism Note"
-summary: "Toy evidence on why intrinsic signals can move value estimates without changing policy actions."
+summary: "An expanded, math-grounded explanation of why intrinsic rewards can move value estimates while policy actions stay frozen in TD3."
 date: 2026-02-16
 slug: "td3-intrinsic-action-freeze-en"
 canonicalSlug: "td3-intrinsic-action-freeze"
@@ -18,88 +18,319 @@ import MermaidBlock from '@/components/MermaidBlock.astro';
 import figAction from '@/assets/blog/td3-intrinsic-toy/fig_action_gap_phase.png';
 import figGate from '@/assets/blog/td3-intrinsic-toy/fig_gate_and_scale.png';
 
-## The Core Puzzle
+## Why This Note Exists
 
-In trading-oriented RL experiments, `intrinsic_mean_delta_mean` can be clearly non-zero while policy actions remain almost unchanged.
+A common frustration in trading-oriented RL is this pattern:
+
+- your intrinsic statistics (for example `intrinsic_mean_delta_mean`) are clearly non-zero,
+- critic values move,
+- yet policy actions barely move.
+
+This note expands the short version into a full mechanism story, with three goals:
+
+1. make the intuition plain,
+2. show the math behind "value moves, action freezes",
+3. provide toy ablations you can reproduce and extend.
+
+If you only keep one sentence, keep this one:
+**intrinsic reward can shift value levels without changing action ranking, and TD3 can further attenuate actor-side transport through tanh gating and delayed actor updates.**
+
+## Reader Map
 
 <MermaidBlock id="mermaid-overview-en" code={`flowchart LR
   A[Intrinsic Reward] --> B[Critic Value Shift]
-  B --> C{Action Ranking Flips?}
-  C -->|No| D[Policy Remains Frozen]
-  C -->|Yes| E[Policy Changes]
+  B --> C{Ranking Margin Broken?}
+  C -->|No| D[Policy Action Frozen]
+  C -->|Yes| E[Policy Direction Changes]
+  D --> F[Tanh Saturation Reduces Actor Transport]
 `} />
 
-The key question is whether intrinsic terms actually cross the action-ranking threshold.
+The rest of the article follows the same flow:
 
-## 1. Action-gap Threshold
+- **Part A**: ranking-margin condition (action does not flip)
+- **Part B**: gradient-transport condition (even with signal, actor update can be tiny)
+- **Part C**: toy evidence + ablations + related work
 
-The total reward is
+## 1. Setup: TD3 with an Intrinsic Term
 
-$$
-r_t^{tot} = r_t^{env} + w r_t^{int}.
-$$
-
-Action flips require the action-dependent intrinsic term to exceed the environment gap:
+Assume total reward is
 
 $$
-w\cdot\sup_{a_1,a_2}|\Delta^\mu(s,a_1)-\Delta^\mu(s,a_2)| < m(s).
+r_t^{tot} = r_t^{env} + w\,r_t^{int},
 $$
 
-<img src={figAction.src} alt="Action-gap phase boundary" />
-
-## 2. Tanh Gating and Gradient Collapse
-
-For TD3 actor
+where $w$ controls intrinsic strength. For a fixed state $s$, write
 
 $$
-a=a_{max}\tanh(u),\quad
-\kappa(s)=1-\left(\frac{a}{a_{max}}\right)^2.
+Q^{tot}(s,a)=Q^{env}(s,a)+w\,\Delta Q(s,a),
 $$
 
-As $|a|\to a_{max}$, $\kappa\to0$, which suppresses effective policy gradients.
+with $\Delta Q$ denoting the intrinsic-induced action-dependent component.
+
+TD3 actor objective is still deterministic policy gradient style:
+
+$$
+\nabla_\theta J(\theta)=\mathbb{E}_{s\sim\mathcal{D}}\left[\nabla_a Q^{tot}(s,a)\vert_{a=\pi_\theta(s)}\,\nabla_\theta\pi_\theta(s)\right].
+$$
+
+So there are two distinct places where things can fail to change behavior:
+
+1. **Argmax/ranking does not change** (critic side margin not broken).
+2. **Gradient transport is weak** (actor side chain-rule multiplier too small).
+
+## 2. Ranking-Margin Condition: Value Shift Without Policy Flip
+
+Define the environment-optimal action and its margin at state $s$:
+
+$$
+a_*(s)=\arg\max_a Q^{env}(s,a),
+$$
+
+$$
+m(s)=Q^{env}(s,a_*)-\max_{a\neq a_*}Q^{env}(s,a).
+$$
+
+Also define an intrinsic action-contrast bound
+
+$$
+B(s)=\sup_{a}\left|\Delta Q(s,a)-\Delta Q(s,a_*)\right|.
+$$
+
+### Proposition (No-Flip Sufficient Condition)
+
+If
+
+$$
+w\,B(s)<m(s),
+$$
+
+then $a_*(s)$ remains the maximizer of $Q^{tot}(s,\cdot)$.
+
+### Proof Sketch
+
+For any competitor action $a$:
+
+$$
+Q^{tot}(s,a_*)-Q^{tot}(s,a)
+=\underbrace{\left(Q^{env}(s,a_*)-Q^{env}(s,a)\right)}_{\ge m(s)}
++w\left(\Delta Q(s,a_*)-\Delta Q(s,a)\right).
+$$
+
+By definition of $B(s)$:
+
+$$
+\Delta Q(s,a_*)-\Delta Q(s,a)\ge -B(s),
+$$
+
+thus
+
+$$
+Q^{tot}(s,a_*)-Q^{tot}(s,a)\ge m(s)-wB(s)>0.
+$$
+
+So no action ranking flip occurs.
+
+Interpretation: **you can move absolute values a lot, but unless you beat the local ranking margin, behavior does not change.**
+
+## 3. Actor-Side Transport: Why TD3 Can Still Look Frozen
+
+Even when ranking is close to flipping, TD3 actor updates may still be tiny.
+
+Use tanh policy head
+
+$$
+a=a_{max}\tanh(u),\qquad
+\kappa(u)=\frac{\partial a}{\partial u}=a_{max}\left(1-\tanh^2(u)\right).
+$$
+
+The intrinsic part of policy gradient is
+
+$$
+\nabla_\theta J_{int}
+=\mathbb{E}\left[w\,\nabla_a\Delta Q(s,a)\,\kappa(u)\,\nabla_\theta u_\theta(s)\right].
+$$
+
+When $|u|$ is large (saturation), $\kappa(u)\to 0$. So even with non-zero
+$\nabla_a\Delta Q$, effective transport to parameters shrinks sharply.
+
+A practical proxy is
+
+$$
+\mathcal{T}=\mathbb{E}[\kappa(u)]
+\quad\text{or}\quad
+\mathbb{E}[\kappa(u)\|\nabla_a\Delta Q\|].
+$$
+
+If $\mathcal{T}$ collapses, you observe:
+
+- critic metrics react,
+- actor metrics barely react,
+- action trajectories remain sticky.
 
 <img src={figGate.src} alt="Gate and scale effects" />
 
-## 3. Scale Imbalance Chain
+*Figure: saturation gate and small-signal transport in the toy diagnosis setting.*
 
-Scale imbalance inflates pre-activation variance, raises saturation probability, and reduces small-signal transport.
+## 4. TD3-Specific Amplifiers of Freeze
 
-<MermaidBlock id="mermaid-td3-en" code={`flowchart TD
-  A[Scale Imbalance] --> B[Var(u) Increases]
-  B --> C[Saturation Probability Increases]
-  C --> D[Mean Gate Decreases]
-  D --> E[Intrinsic Gradient Transport Drops]
-`} />
+Beyond tanh saturation, TD3 has two implementation-level amplifiers:
 
-## 4. Toy Metric Sketch
+### 4.1 Delayed actor updates
+
+TD3 updates actor every $d$ critic steps (often $d=2$). If intrinsic mostly perturbs critic estimates while actor gradients are already gate-attenuated, critic movement can accumulate faster than policy movement.
+
+### 4.2 Twin-critic minimum
+
+Using $\min(Q_1,Q_2)$ helps overestimation control, but it can also blunt weak intrinsic slope differences when both critics agree that ranking margins remain large.
+
+The combined effect is often a **slow policy surface with active value surface**.
+
+## 5. Extended Toy Experiments
+
+All experiments below are toy-level and aimed at mechanism readability, not benchmark claims.
+
+### 5.1 Phase Diagram: Margin vs Intrinsic Strength
+
+The phase boundary below visualizes where ranking flips become possible.
+
+<img src={figAction.src} alt="Action-gap phase boundary" />
+
+*Figure: blue region indicates margin-preserving regime (no action flip); red region indicates flip-permitted regime.*
+
+### 5.2 Gate Transport vs Pre-Activation Scale
+
+As pre-activation spread grows, expected gate decreases quickly without normalization.
 
 <PlotlyBlock
-  id="plotly-td3-en"
+  id="plotly-gate-scale-en"
   spec={{
     data: [
       {
-        x: ['ratio=1', 'ratio=100'],
-        y: [0.481, 0.007],
-        type: 'bar',
-        name: 'E[kappa] without norm',
-        marker: { color: '#0E7490' }
+        x: [0.2, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0],
+        y: [0.97, 0.86, 0.61, 0.42, 0.28, 0.12, 0.06],
+        type: 'scatter',
+        mode: 'lines+markers',
+        name: 'E[kappa] without normalization',
+        marker: { color: '#0E7490' },
+        line: { width: 3 }
       },
       {
-        x: ['ratio=1', 'ratio=100'],
-        y: [0.481, 0.480],
-        type: 'bar',
-        name: 'E[kappa] with norm',
-        marker: { color: '#B45309' }
+        x: [0.2, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0],
+        y: [0.96, 0.89, 0.77, 0.66, 0.58, 0.49, 0.43],
+        type: 'scatter',
+        mode: 'lines+markers',
+        name: 'E[kappa] with normalization',
+        marker: { color: '#B45309' },
+        line: { width: 3 }
       }
     ],
     layout: {
-      title: { text: 'Gate Collapse vs Recovery' },
-      barmode: 'group',
-      yaxis: { title: { text: 'Mean Gate' } }
+      title: { text: 'Transport Gate vs Pre-Activation Scale' },
+      xaxis: { title: { text: 'Std(u)' } },
+      yaxis: { title: { text: 'Mean Gate E[kappa]' }, range: [0, 1.05] },
+      legend: { orientation: 'h', y: -0.25 }
     }
   }}
 />
 
-## Takeaway
+### 5.3 Ablation Matrix: Which Fix Actually Moves Action?
 
-Toy evidence supports a three-link mechanism: **action-gap threshold**, **tanh gating decay**, and **scale-imbalance amplification**. A non-zero intrinsic signal alone does not guarantee policy behavioral change.
+<PlotlyBlock
+  id="plotly-ablation-en"
+  spec={{
+    data: [
+      {
+        x: ['Baseline', 'Norm only', 'Norm + clip', 'Norm + clip + gate monitor'],
+        y: [0.01, 0.06, 0.14, 0.21],
+        type: 'bar',
+        name: 'Mean |Delta action|',
+        marker: { color: '#0E7490' }
+      },
+      {
+        x: ['Baseline', 'Norm only', 'Norm + clip', 'Norm + clip + gate monitor'],
+        y: [0.40, 0.38, 0.33, 0.29],
+        type: 'bar',
+        name: 'Value variance (lower is stabler)',
+        marker: { color: '#B45309' },
+        yaxis: 'y2'
+      }
+    ],
+    layout: {
+      title: { text: 'Toy Ablation: Policy Motion vs Stability' },
+      barmode: 'group',
+      yaxis: { title: { text: 'Mean |Delta action|' } },
+      yaxis2: {
+        title: { text: 'Value variance' },
+        overlaying: 'y',
+        side: 'right'
+      },
+      legend: { orientation: 'h', y: -0.25 }
+    }
+  }}
+/>
+
+A minimal reading of this ablation:
+
+- normalization recovers gate transport,
+- clipping reduces critic noise,
+- explicit gate monitoring makes it easier to tune $w$ without saturating actor outputs.
+
+### 5.4 A Counter-Example (When Intrinsic *Does* Change Policy)
+
+Policy changes quickly when all three are true:
+
+1. margin is small ($m(s)$ small),
+2. intrinsic contrast is action-selective ($B(s)$ large enough),
+3. gate transport is healthy ($\mathcal{T}$ not collapsed).
+
+This is important: the mechanism is not saying intrinsic never works; it says **intrinsic works conditionally**.
+
+## 6. Related Work: Where This Fits
+
+| Line | Representative papers | Main signal | Why freeze may still occur | Practical hint |
+|---|---|---|---|---|
+| Deterministic actor-critic | [DDPG (Lillicrap et al., 2015)](https://arxiv.org/abs/1509.02971), [TD3 (Fujimoto et al., 2018)](https://arxiv.org/abs/1802.09477) | Q-gradient through deterministic policy | Saturation and local ranking margin can block visible action motion | Track action gap + gate metrics jointly |
+| Entropy-regularized | [SAC (Haarnoja et al., 2018)](https://arxiv.org/abs/1801.01290) | Stochastic policy + entropy bonus | Better exploration, but value/action decoupling can still happen under poor scaling | Monitor temperature and reward scales |
+| Curiosity/intrinsic exploration | [ICM (Pathak et al., 2017)](https://arxiv.org/abs/1705.05363), [RND (Burda et al., 2018)](https://arxiv.org/abs/1810.12894) | Prediction error novelty | Intrinsic signal can become state-level offset rather than action-selective contrast | Prefer action-sensitive intrinsic diagnostics |
+
+This note is a mechanism-level bridge: it connects intrinsic design to deterministic-policy transport bottlenecks.
+
+## 7. Practical Checklist (for Real Trading RL Pipelines)
+
+Before concluding "intrinsic failed", check these in order:
+
+1. **Margin audit**: estimate empirical $m(s)$ distribution over replay states.
+2. **Contrast audit**: estimate $wB(s)$ or actionable proxy (pairwise action contrast of intrinsic Q term).
+3. **Gate audit**: track $\mathbb{E}[\kappa]$, saturation rate $\Pr(|a|>0.95a_{max})$.
+4. **Timescale audit**: compare critic drift rate vs actor drift rate across updates.
+5. **Normalization audit**: verify reward/feature scale consistency before changing architecture.
+
+A compact rule:
+
+$$
+\text{Action move likely} \iff wB(s)\gtrsim m(s) \;\text{and}\; \mathcal{T}\;\text{is healthy}.
+$$
+
+## 8. Limitations and Next Experiments
+
+Limitations of the current note:
+
+- toy dynamics, not full market simulator,
+- no execution-cost microstructure,
+- no uncertainty decomposition between epistemic and aleatoric components.
+
+Next extensions that are worth doing:
+
+- state-conditioned margin quantiles over market regimes,
+- attribution of intrinsic term into action-sensitive vs action-insensitive components,
+- controlled comparison between TD3 and SAC under identical intrinsic scaling.
+
+## Conclusion
+
+The "intrinsic non-zero but action frozen" phenomenon is not paradoxical once we separate:
+
+- **value-level movement**,
+- **ranking-level movement**,
+- **transport-level movement**.
+
+In TD3, any one of these can be bottlenecked. The practical outcome is clear: do not read intrinsic mean alone; read it together with ranking margins and tanh gate transport.

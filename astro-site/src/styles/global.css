@@ -458,6 +458,168 @@ main {
   min-width: 0;
 }
 
+.article-layout article > * {
+  max-width: 74ch;
+}
+
+.article-layout article > :where(h2, h3, h4),
+.article-layout article > [data-plotly-spec],
+.article-layout article > img,
+.article-layout article > table,
+.article-layout article > pre,
+.article-layout article > blockquote,
+.article-layout article > .katex-display,
+.article-layout article > svg {
+  max-width: none;
+}
+
+.article-layout article h2,
+.article-layout article h3,
+.article-layout article h4 {
+  scroll-margin-top: 5.6rem;
+  letter-spacing: 0.01em;
+}
+
+.article-layout article h2 {
+  margin-top: clamp(1.7rem, 3vw, 2.25rem);
+  margin-bottom: 0.65rem;
+  padding-top: 0.55rem;
+  font-family: var(--font-display);
+  font-size: clamp(1.32rem, 2.3vw, 1.9rem);
+  line-height: 1.2;
+  border-top: 1px solid color-mix(in oklab, var(--ink-950) 14%, white 86%);
+}
+
+.article-layout article h3 {
+  margin-top: 1.25rem;
+  margin-bottom: 0.45rem;
+  font-family: var(--font-display);
+  font-size: clamp(1.07rem, 1.75vw, 1.34rem);
+  line-height: 1.26;
+}
+
+.article-layout article p {
+  margin: 0.58rem 0 0.86rem;
+  color: var(--ink-800);
+  font-size: clamp(1rem, 1.16vw, 1.08rem);
+  line-height: 1.82;
+  hanging-punctuation: first last;
+}
+
+.article-layout article ul,
+.article-layout article ol {
+  margin: 0.5rem 0 0.95rem;
+  padding-left: 1.26rem;
+  color: var(--ink-800);
+}
+
+.article-layout article li {
+  margin: 0.28rem 0;
+  line-height: 1.74;
+}
+
+.article-layout article strong {
+  font-weight: 600;
+  color: var(--ink-950);
+}
+
+.article-layout article blockquote {
+  margin: 1.1rem 0;
+  padding: 0.72rem 0.92rem;
+  border-left: 3px solid color-mix(in oklab, var(--teal-600) 56%, white 44%);
+  border-radius: 0 11px 11px 0;
+  background: color-mix(in oklab, var(--teal-600) 8%, white 92%);
+}
+
+.article-layout article blockquote p {
+  margin: 0.2rem 0;
+  color: var(--ink-700);
+}
+
+.article-layout article hr {
+  margin: 1.3rem 0;
+  border: 0;
+  border-top: 1px solid color-mix(in oklab, var(--ink-950) 14%, white 86%);
+}
+
+.article-layout article table {
+  width: 100%;
+  margin: 0.95rem 0 1.2rem;
+  border-collapse: collapse;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  background: color-mix(in oklab, var(--paper-50) 84%, white 16%);
+}
+
+.article-layout article th,
+.article-layout article td {
+  text-align: left;
+  vertical-align: top;
+  padding: 0.6rem 0.68rem;
+  border-bottom: 1px solid color-mix(in oklab, var(--ink-950) 10%, white 90%);
+  font-size: 0.95rem;
+  line-height: 1.54;
+}
+
+.article-layout article th {
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  letter-spacing: 0.015em;
+  color: var(--ink-950);
+  background: color-mix(in oklab, var(--teal-600) 8%, white 92%);
+}
+
+.article-layout article tr:last-child td {
+  border-bottom: 0;
+}
+
+.article-layout article :not(pre) > code {
+  border: 1px solid color-mix(in oklab, var(--ink-950) 15%, white 85%);
+  border-radius: 7px;
+  padding: 0.1rem 0.36rem;
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  color: var(--ink-700);
+  background: color-mix(in oklab, var(--paper-50) 80%, white 20%);
+}
+
+.article-layout article pre {
+  margin: 0.92rem 0 1.12rem;
+  border-radius: 12px;
+  border: 1px solid color-mix(in oklab, var(--ink-950) 16%, white 84%);
+  padding: 0.86rem;
+  background: color-mix(in oklab, var(--paper-100) 74%, white 26%);
+}
+
+.article-layout article pre code {
+  border: 0;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+}
+
+.article-layout article img,
+.article-layout article svg,
+.article-layout article [data-plotly-spec] {
+  display: block;
+  width: 100%;
+  margin: 0.82rem 0 0.36rem;
+  border: 1px solid color-mix(in oklab, var(--ink-950) 14%, white 86%);
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--paper-50) 90%, white 10%);
+}
+
+.article-layout article [data-plotly-spec] {
+  min-height: 400px;
+}
+
+.article-layout article .katex-display {
+  margin: 0.72rem 0;
+  padding: 0.25rem 0.45rem;
+  border-left: 2px solid color-mix(in oklab, var(--amber-700) 36%, white 64%);
+}
+
 .toc {
   position: sticky;
   top: 1rem;
@@ -605,6 +767,12 @@ main {
 
   .toc-details[open] summary {
     margin-bottom: 0.5rem;
+  }
+
+  .article-layout article table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
   }
 }
 
