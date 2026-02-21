@@ -13,10 +13,11 @@ locale: en
 cover: "fig_action_gap_phase"
 ---
 
-import PlotlyBlock from '@/components/PlotlyBlock.astro';
 import MermaidBlock from '@/components/MermaidBlock.astro';
 import figAction from '@/assets/blog/td3-intrinsic-toy/fig_action_gap_phase.png';
 import figGate from '@/assets/blog/td3-intrinsic-toy/fig_gate_and_scale.png';
+import figTransport from '@/assets/blog/td3-intrinsic-toy/fig_gate_transport_scale.png';
+import figAblation from '@/assets/blog/td3-intrinsic-toy/fig_ablation_matrix.png';
 
 ## Why This Note Exists
 
@@ -201,73 +202,15 @@ The phase boundary below visualizes where ranking flips become possible.
 
 As pre-activation spread grows, expected gate decreases quickly without normalization.
 
-<PlotlyBlock
-  id="plotly-gate-scale-en"
-  spec={{
-    data: [
-      {
-        x: [0.2, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0],
-        y: [0.97, 0.86, 0.61, 0.42, 0.28, 0.12, 0.06],
-        type: 'scatter',
-        mode: 'lines+markers',
-        name: 'E[kappa] without normalization',
-        marker: { color: '#0E7490' },
-        line: { width: 3 }
-      },
-      {
-        x: [0.2, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0],
-        y: [0.96, 0.89, 0.77, 0.66, 0.58, 0.49, 0.43],
-        type: 'scatter',
-        mode: 'lines+markers',
-        name: 'E[kappa] with normalization',
-        marker: { color: '#B45309' },
-        line: { width: 3 }
-      }
-    ],
-    layout: {
-      title: { text: 'Transport Gate vs Pre-Activation Scale' },
-      xaxis: { title: { text: 'Std(u)' } },
-      yaxis: { title: { text: 'Mean Gate E[kappa]' }, range: [0, 1.05] },
-      legend: { orientation: 'h', y: -0.25 }
-    }
-  }}
-/>
+<img src={figTransport.src} alt="Transport Gate vs Pre-Activation Scale" />
+
+*Figure: line trend of gate transport under rising pre-activation spread (with vs without normalization).*
 
 ### 5.3 Ablation Matrix: Which Fix Actually Moves Action?
 
-<PlotlyBlock
-  id="plotly-ablation-en"
-  spec={{
-    data: [
-      {
-        x: ['Baseline', 'Norm only', 'Norm + clip', 'Norm + clip + gate monitor'],
-        y: [0.01, 0.06, 0.14, 0.21],
-        type: 'bar',
-        name: 'Mean |Delta action|',
-        marker: { color: '#0E7490' }
-      },
-      {
-        x: ['Baseline', 'Norm only', 'Norm + clip', 'Norm + clip + gate monitor'],
-        y: [0.40, 0.38, 0.33, 0.29],
-        type: 'bar',
-        name: 'Value variance (lower is stabler)',
-        marker: { color: '#B45309' },
-        yaxis: 'y2'
-      }
-    ],
-    layout: {
-      title: { text: 'Toy Ablation: Policy Motion vs Stability' },
-      barmode: 'group',
-      yaxis: { title: { text: 'Mean |Delta action|' } },
-      yaxis2: {
-        title: { text: 'Value variance' },
-        overlaying: 'y',
-        side: 'right'
-      },
-      legend: { orientation: 'h', y: -0.25 }
-    }
-  }}
-/>
+<img src={figAblation.src} alt="Toy Ablation: Policy Motion vs Stability" />
+
+*Figure: grouped bars show policy action movement and value variance across ablation settings.*
 
 A minimal reading of this ablation:
 

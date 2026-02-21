@@ -6,21 +6,39 @@ interface Props {
 }
 
 const { id, spec, height = 430 } = Astro.props;
+const serializedSpec = JSON.stringify(spec).replace(/</g, '\\u003c');
 ---
 
-<div id={id} style={`width:100%; min-height:${height}px;`} data-plotly-spec={JSON.stringify(spec)}></div>
+<div id={id} style={`width:100%; min-height:${height}px;`} data-plotly-spec={serializedSpec}></div>
 
-<script type="module" is:inline>
-  const nodes = document.querySelectorAll('[data-plotly-spec]');
-  if (nodes.length > 0) {
-    const Plotly = await import('https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/+esm');
+<script>
+  import Plotly from 'plotly.js-dist-min';
+
+  const renderPlotlyBlocks = () => {
+    const nodes = document.querySelectorAll('[data-plotly-spec]');
+    if (nodes.length === 0) return;
+
     for (const node of nodes) {
       if (node.dataset.plotlyRendered === 'true') continue;
       const raw = node.getAttribute('data-plotly-spec');
       if (!raw) continue;
-      const spec = JSON.parse(raw);
-      Plotly.default.newPlot(node, spec.data ?? [], spec.layout ?? {}, { responsive: true });
-      node.dataset.plotlyRendered = 'true';
+
+      try {
+        const spec = JSON.parse(raw);
+        Plotly.newPlot(node, spec.data ?? [], spec.layout ?? {}, {
+          responsive: true,
+          displaylogo: false
+        });
+        node.dataset.plotlyRendered = 'true';
+      } catch (error) {
+        node.innerHTML = '<p style="padding:0.75rem;color:#7a8798;font-family:var(--font-mono);font-size:0.85rem;">Interactive chart failed to render.</p>';
+      }
     }
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', renderPlotlyBlocks, { once: true });
+  } else {
+    renderPlotlyBlocks();
   }
 </script>

@@ -13,10 +13,11 @@ locale: zh
 cover: "fig_action_gap_phase"
 ---
 
-import PlotlyBlock from '@/components/PlotlyBlock.astro';
 import MermaidBlock from '@/components/MermaidBlock.astro';
 import figAction from '@/assets/blog/td3-intrinsic-toy/fig_action_gap_phase.png';
 import figGate from '@/assets/blog/td3-intrinsic-toy/fig_gate_and_scale.png';
+import figTransport from '@/assets/blog/td3-intrinsic-toy/fig_gate_transport_scale.png';
+import figAblation from '@/assets/blog/td3-intrinsic-toy/fig_ablation_matrix.png';
 
 ## 为什么要写这篇扩展版
 
@@ -174,73 +175,15 @@ TD3 常用“critic 多步，actor 一步”的节奏（如 2:1）。当 intrins
 
 ### 5.2 预激活尺度与门控传输
 
-<PlotlyBlock
-  id="plotly-gate-scale-zh"
-  spec={{
-    data: [
-      {
-        x: [0.2, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0],
-        y: [0.97, 0.86, 0.61, 0.42, 0.28, 0.12, 0.06],
-        type: 'scatter',
-        mode: 'lines+markers',
-        name: '未归一化 E[kappa]',
-        marker: { color: '#0E7490' },
-        line: { width: 3 }
-      },
-      {
-        x: [0.2, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0],
-        y: [0.96, 0.89, 0.77, 0.66, 0.58, 0.49, 0.43],
-        type: 'scatter',
-        mode: 'lines+markers',
-        name: '归一化后 E[kappa]',
-        marker: { color: '#B45309' },
-        line: { width: 3 }
-      }
-    ],
-    layout: {
-      title: { text: '门控传输 vs 预激活尺度' },
-      xaxis: { title: { text: 'Std(u)' } },
-      yaxis: { title: { text: 'Mean Gate E[kappa]' }, range: [0, 1.05] },
-      legend: { orientation: 'h', y: -0.25 }
-    }
-  }}
-/>
+<img src={figTransport.src} alt="门控传输 vs 预激活尺度" />
+
+*图：预激活尺度升高时，门控传输在未归一化情形下明显下降。*
 
 ### 5.3 Ablation：哪些改动真正让动作动起来
 
-<PlotlyBlock
-  id="plotly-ablation-zh"
-  spec={{
-    data: [
-      {
-        x: ['Baseline', 'Norm only', 'Norm + clip', 'Norm + clip + gate monitor'],
-        y: [0.01, 0.06, 0.14, 0.21],
-        type: 'bar',
-        name: 'Mean |Delta action|',
-        marker: { color: '#0E7490' }
-      },
-      {
-        x: ['Baseline', 'Norm only', 'Norm + clip', 'Norm + clip + gate monitor'],
-        y: [0.40, 0.38, 0.33, 0.29],
-        type: 'bar',
-        name: 'Value variance (越低越稳)',
-        marker: { color: '#B45309' },
-        yaxis: 'y2'
-      }
-    ],
-    layout: {
-      title: { text: 'Toy Ablation：动作变化与稳定性的平衡' },
-      barmode: 'group',
-      yaxis: { title: { text: 'Mean |Delta action|' } },
-      yaxis2: {
-        title: { text: 'Value variance' },
-        overlaying: 'y',
-        side: 'right'
-      },
-      legend: { orientation: 'h', y: -0.25 }
-    }
-  }}
-/>
+<img src={figAblation.src} alt="Toy Ablation: 动作变化与稳定性的平衡" />
+
+*图：不同 ablation 设置下的动作变化幅度与 value 方差对比。*
 
 ### 5.4 反例：intrinsic 何时会明显改变 policy
 
