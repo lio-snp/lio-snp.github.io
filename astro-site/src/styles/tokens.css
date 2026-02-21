@@ -1,0 +1,44 @@
+:root {
+  --ink-950: #0d1b2a;
+  --ink-700: #1f3552;
+  --paper-50: #f7f3ea;
+  --paper-100: #ede8df;
+  --teal-600: #0e7490;
+  --amber-700: #b45309;
+  --white: #ffffff;
+
+  --surface-main: var(--paper-50);
+  --surface-card: color-mix(in oklab, var(--paper-50) 84%, var(--white) 16%);
+  --text-main: var(--ink-950);
+  --text-muted: color-mix(in oklab, var(--ink-950) 62%, white 38%);
+  --border-subtle: color-mix(in oklab, var(--ink-950) 12%, white 88%);
+
+  --space-xs: 0.4rem;
+  --space-sm: 0.7rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2.2rem;
+  --space-2xl: 3.5rem;
+
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+
+  --shadow-soft: 0 14px 40px rgba(13, 27, 42, 0.08);
+  --shadow-focus: 0 0 0 3px color-mix(in oklab, var(--teal-600) 45%, white 55%);
+
+  --dur-enter: 220ms;
+  --dur-stagger: 50ms;
+  --ease-standard: cubic-bezier(0.22, 0.8, 0.2, 1);
+
+  --font-display: 'Space Grotesk', 'Segoe UI', sans-serif;
+  --font-body: 'Source Serif 4', Georgia, serif;
+  --font-mono: 'IBM Plex Mono', Menlo, monospace;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-enter: 0ms;
+    --dur-stagger: 0ms;
+  }
+}

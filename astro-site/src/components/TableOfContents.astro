@@ -1,0 +1,89 @@
+---
+interface Props {
+  title: string;
+}
+
+const { title } = Astro.props;
+---
+
+<aside class="toc" data-toc-root aria-label={title}>
+  <details class="toc-details" data-toc-details open>
+    <summary>{title}</summary>
+    <ul data-toc-list>
+      <li><span>...</span></li>
+    </ul>
+  </details>
+</aside>
+
+<script is:inline>
+  const tocRoot = document.querySelector('[data-toc-root]');
+  const details = tocRoot?.querySelector('[data-toc-details]');
+  const list = tocRoot?.querySelector('[data-toc-list]');
+
+  if (window.matchMedia('(max-width: 900px)').matches && details) {
+    details.removeAttribute('open');
+  }
+
+  if (tocRoot && list) {
+    const headings = [...document.querySelectorAll('article h2, article h3')];
+    const headingById = new Map();
+    list.innerHTML = '';
+
+    headings.forEach((heading) => {
+      if (!heading.id) {
+        heading.id = heading.textContent
+          .toLowerCase()
+          .replace(/[^a-z0-9\u4e00-\u9fa5\s-]/g, '')
+          .trim()
+          .replace(/\s+/g, '-');
+      }
+      headingById.set(heading.id, heading);
+
+      const li = document.createElement('li');
+      const link = document.createElement('a');
+      link.href = `#${heading.id}`;
+      link.textContent = heading.textContent || '';
+      link.setAttribute('data-toc-link', heading.id);
+      if (heading.tagName === 'H3') link.classList.add('toc-sub');
+      li.appendChild(link);
+      list.appendChild(li);
+    });
+
+    if (headings.length === 0) {
+      list.innerHTML = '<li><span>...</span></li>';
+      return;
+    }
+
+    const links = [...tocRoot.querySelectorAll('[data-toc-link]')];
+    const activateLink = (id) => {
+      links.forEach((link) => {
+        const active = link.getAttribute('data-toc-link') === id;
+        link.classList.toggle('active', active);
+        if (active) {
+          link.setAttribute('aria-current', 'true');
+        } else {
+          link.removeAttribute('aria-current');
+        }
+      });
+    };
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+
+        if (visible && visible.target.id) {
+          activateLink(visible.target.id);
+        }
+      },
+      {
+        rootMargin: '-30% 0px -55% 0px',
+        threshold: [0, 0.2, 0.6]
+      }
+    );
+
+    headingById.forEach((heading) => observer.observe(heading));
+    if (headings[0]?.id) activateLink(headings[0].id);
+  }
+</script>

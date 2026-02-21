@@ -1,0 +1,22 @@
+---
+import { render } from 'astro:content';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { getPageEntry } from '@/lib/content';
+
+const page = await getPageEntry('en', 'about');
+const { Content } = await render(page);
+---
+
+<BaseLayout
+  title={page.data.seoTitle}
+  description={page.data.seoDescription}
+  locale="en"
+  currentPath="/en/about/"
+  alternatePath="/about/"
+>
+  <section class="section-card">
+    <p class="section-kicker">About</p>
+    <h1 class="section-title">{page.data.title}</h1>
+    <Content />
+  </section>
+</BaseLayout>

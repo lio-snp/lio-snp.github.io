@@ -1,0 +1,279 @@
+---
+locale: en-US
+site_theme: default
+title: Yanlin (Leo) Liu
+title_separator: "-"
+name: Your Name
+description: 'Undergraduate in Management Information Systems — SWUFE × University
+  of Delaware Joint Program. Research interests: alt-data for risk, interpretable
+  ML, and practical evaluation for fintech.'
+url: ''
+baseurl: ''
+repository: Liosnp/liosnp
+author:
+  avatar: profile.png
+  name: Yanlin (Leo) Liu
+  pronouns: 
+  bio: I study MIS in a Sino-foreign joint program (SWUFE × University of Delaware).
+    My recent work explores how satellite and climate signals improve credit risk
+    models, and how to build trustworthy, explainable evaluation pipelines for financial
+    AI.
+  location: Chengdu, China
+  employer: Southwestern University of Finance and Economics (SWUFE) — University
+    of Delaware (Joint Program)
+  uri: 
+  email: snaclp@udel.edu
+  academia: 
+  arxiv: 
+  googlescholar: https://scholar.google.com/citations?user=PS_CX0AAAAAJ
+  inspire-hep: 
+  impactstory: 
+  orcid: http://orcid.org/yourorcidurl
+  semantic: 
+  pubmed: https://www.ncbi.nlm.nih.gov/pubmed/?term=john+snow
+  researchgate: 
+  scopus: 
+  bitbucket: 
+  codepen: 
+  dribbble: 
+  github: Liosnp
+  kaggle: 
+  stackoverflow: 
+  artstation: 
+  bluesky: bsky.app
+  facebook: 
+  flickr: 
+  foursquare: 
+  goodreads: 
+  google_plus: 
+  keybase: 
+  instagram: 
+  lastfm: 
+  linkedin: yanlin-liu-1a8882327
+  mastodon: 
+  medium: 
+  pinterest: 
+  soundcloud: 
+  steam: 
+  telegram: 
+  tumblr: 
+  twitter: 
+  vine: 
+  weibo: 
+  wikipedia: 
+  xing: 
+  youtube: 
+  zhihu: 
+publication_category:
+  books:
+    title: Books
+  manuscripts:
+    title: Journal Articles
+  conferences:
+    title: Conference Papers
+teaser: 
+breadcrumbs: false
+words_per_minute: 160
+future: true
+read_more: disabled
+talkmap_link: false
+comments:
+  provider: 
+  disqus:
+    shortname: 
+  discourse:
+    server: 
+  facebook:
+    appid: 
+    num_posts: 
+    colorscheme: 
+staticman:
+  allowedFields:
+  - name
+  - email
+  - url
+  - message
+  branch: gh-pages
+  commitMessage: New comment.
+  filename: comment-{@timestamp}
+  format: yml
+  moderation: true
+  path: _data/comments/{options.slug}
+  requiredFields:
+  - name
+  - email
+  - message
+  transforms:
+    email: md5
+  generatedFields:
+    date:
+      type: date
+      options:
+        format: iso8601
+atom_feed:
+  hide: false
+  path: 
+google_site_verification: 
+bing_site_verification: 
+alexa_site_verification: 
+yandex_site_verification: 
+twitter:
+  username: 
+facebook:
+  username: 
+  app_id: 
+  publisher: 
+og_image: 
+og_description: 
+social:
+  type: 
+  name: 
+  links: 
+analytics:
+  provider: 'false'
+  google:
+    tracking_id: 
+include:
+- ".htaccess"
+- _pages
+- files
+exclude:
+- "*.sublime-project"
+- "*.sublime-workspace"
+- ".asset-cache"
+- ".bundle"
+- ".github"
+- ".jekyll-assets-cache"
+- ".sass-cache"
+- assets/js/_main.js
+- assets/js/plugins
+- assets/js/vendor
+- CHANGELOG
+- Capfile
+- config
+- Dockerfile
+- Gemfile
+- Gruntfile.js
+- gulpfile.js
+- LICENSE
+- local
+- log
+- node_modules
+- package.json*
+- Rakefile
+- README
+- tmp
+- vendor
+keep_files:
+- ".git"
+- ".svn"
+encoding: utf-8
+markdown_ext: markdown,mkdown,mkdn,mkd,md
+markdown: kramdown
+highlighter: rouge
+lsi: false
+excerpt_separator: "\n\n"
+incremental: false
+kramdown:
+  input: GFM
+  hard_wrap: false
+  auto_ids: true
+  footnote_nr: 1
+  entity_output: as_char
+  toc_levels: 1..6
+  smart_quotes: lsquo,rsquo,ldquo,rdquo
+  enable_coderay: false
+collections:
+  teaching:
+    output: true
+    permalink: "/:collection/:path/"
+  publications:
+    output: true
+    permalink: "/:collection/:path/"
+  portfolio:
+    output: true
+    permalink: "/:collection/:path/"
+  talks:
+    output: true
+    permalink: "/:collection/:path/"
+defaults:
+- scope:
+    path: ''
+    type: posts
+  values:
+    layout: single
+    author_profile: true
+    read_time: true
+    comments: true
+    share: true
+    related: true
+- scope:
+    path: ''
+    type: pages
+  values:
+    layout: single
+    author_profile: true
+- scope:
+    path: ''
+    type: teaching
+  values:
+    layout: single
+    author_profile: true
+    share: true
+    comments: true
+- scope:
+    path: ''
+    type: publications
+  values:
+    layout: single
+    author_profile: true
+    share: true
+    comments: true
+- scope:
+    path: ''
+    type: portfolio
+  values:
+    layout: single
+    author_profile: true
+    share: true
+    comment: true
+- scope:
+    path: ''
+    type: talks
+  values:
+    layout: talk
+    author_profile: true
+    share: true
+sass:
+  sass_dir: _sass
+  style: compressed
+permalink: "/:categories/:title/"
+timezone: Asia/Shanghai
+plugins:
+- jekyll-feed
+- jekyll-gist
+- jekyll-paginate
+- jekyll-sitemap
+- jekyll-redirect-from
+- jemoji
+whitelist:
+- jekyll-feed
+- jekyll-gist
+- jekyll-paginate
+- jekyll-sitemap
+- jekyll-redirect-from
+- jemoji
+category_archive:
+  type: liquid
+  path: "/categories/"
+tag_archive:
+  type: liquid
+  path: "/tags/"
+compress_html:
+  clippings: all
+  ignore:
+    envs: development
+
+# Custom CSS
+extra_css:
+  - /assets/css/custom.css

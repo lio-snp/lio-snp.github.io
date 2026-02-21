@@ -1,0 +1,53 @@
+---
+import type { Locale } from '@/types/locale';
+
+interface Props {
+  currentLocale: Locale;
+  currentPath: string;
+  alternatePath: string;
+}
+
+const { currentLocale, currentPath, alternatePath } = Astro.props;
+---
+
+<div class="language-toggle" data-lang-toggle data-current={currentLocale} data-current-path={currentPath} data-alt-path={alternatePath}>
+  <button
+    type="button"
+    data-locale="zh"
+    aria-label="Switch to Chinese"
+    aria-pressed={currentLocale === 'zh' ? 'true' : 'false'}
+    class={currentLocale === 'zh' ? 'active' : ''}
+  >
+    ZH
+  </button>
+  <button
+    type="button"
+    data-locale="en"
+    aria-label="Switch to English"
+    aria-pressed={currentLocale === 'en' ? 'true' : 'false'}
+    class={currentLocale === 'en' ? 'active' : ''}
+  >
+    EN
+  </button>
+</div>
+
+<script>
+  document.querySelectorAll('[data-lang-toggle]').forEach((node) => {
+    node.querySelectorAll('button').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const nextLocale = btn.getAttribute('data-locale');
+        const currentLocale = node.getAttribute('data-current');
+        const altPath = node.getAttribute('data-alt-path') || '/';
+        if (!nextLocale) return;
+
+        localStorage.setItem('site_lang', nextLocale);
+
+        if (nextLocale === currentLocale) {
+          return;
+        }
+
+        window.location.assign(altPath);
+      });
+    });
+  });
+</script>

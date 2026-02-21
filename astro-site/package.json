@@ -1,0 +1,26 @@
+{
+  "name": "liosnp-astro-site",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "astro dev",
+    "start": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "check": "astro check"
+  },
+  "dependencies": {
+    "@astrojs/mdx": "^3.1.9",
+    "@astrojs/sitemap": "^3.1.6",
+    "astro": "^4.16.6",
+    "katex": "^0.16.11",
+    "rehype-katex": "^7.0.1",
+    "remark-math": "^6.0.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "playwright": "^1.58.2",
+    "typescript": "^5.6.3"
+  }
+}

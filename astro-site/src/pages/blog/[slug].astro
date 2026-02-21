@@ -1,0 +1,43 @@
+---
+import { getCollection, render, type CollectionEntry } from 'astro:content';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import TableOfContents from '@/components/TableOfContents.astro';
+import { blogPath, sortBlogByDate } from '@/lib/site';
+
+interface Props {
+  post: CollectionEntry<'blog'>;
+}
+
+export async function getStaticPaths() {
+  const posts = await getCollection('blog', (entry) => entry.data.locale === 'zh');
+  return posts.map((post) => ({
+    params: { slug: post.data.canonicalSlug },
+    props: { post }
+  }));
+}
+
+const { post } = Astro.props;
+const { Content } = await render(post);
+
+const enPosts = sortBlogByDate(await getCollection('blog', (entry) => entry.data.locale === 'en'));
+const alternate = enPosts.find((item) => item.data.canonicalSlug === post.data.canonicalSlug);
+const alternatePath = alternate ? blogPath('en', alternate.data.canonicalSlug) : '/en/blog/';
+---
+
+<BaseLayout
+  title={`${post.data.title} · Yanlin (Leo)`}
+  description={post.data.summary}
+  locale="zh"
+  currentPath={blogPath('zh', post.data.canonicalSlug)}
+  alternatePath={alternatePath}
+>
+  <section class="section-card article-layout">
+    <article>
+      <p class="section-kicker">Research Blog</p>
+      <h1 class="section-title" style="font-size:clamp(1.7rem, 3.2vw, 2.45rem);">{post.data.title}</h1>
+      <p style="color:var(--text-muted);">{post.data.summary}</p>
+      <Content />
+    </article>
+    <TableOfContents title="目录" />
+  </section>
+</BaseLayout>

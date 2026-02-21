@@ -1,0 +1,31 @@
+---
+import { render } from 'astro:content';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import BlogCard from '@/components/BlogCard.astro';
+import { getPageEntry, getBlogEntries } from '@/lib/content';
+import { sortBlogByDate } from '@/lib/site';
+
+const page = await getPageEntry('en', 'home');
+const posts = sortBlogByDate(await getBlogEntries('en')).slice(0, 3);
+const { Content } = await render(page);
+---
+
+<BaseLayout
+  title={page.data.seoTitle}
+  description={page.data.seoDescription}
+  locale="en"
+  currentPath="/en/"
+  alternatePath="/"
+>
+  <section class="section-card hero-card">
+    <Content />
+  </section>
+
+  <section class="section-card feed-card">
+    <p class="section-kicker">Latest Notes</p>
+    <h2 class="section-title" style="font-size:clamp(1.4rem, 2.8vw, 2rem);">Recent Posts</h2>
+    <div class="blog-list">
+      {posts.map((post) => <BlogCard post={post} locale="en" />)}
+    </div>
+  </section>
+</BaseLayout>

@@ -1,0 +1,26 @@
+---
+import { navMap, SITE_NAME } from '@/lib/site';
+import LanguageToggle from '@/components/LanguageToggle.astro';
+import type { Locale } from '@/types/locale';
+
+interface Props {
+  locale: Locale;
+  currentPath: string;
+  alternatePath: string;
+}
+
+const { locale, currentPath, alternatePath } = Astro.props;
+const navItems = navMap[locale];
+---
+
+<header class="top-nav">
+  <a class="brand" href={locale === 'zh' ? '/' : '/en/'}>{SITE_NAME}</a>
+
+  <nav class="nav-links" aria-label={locale === 'zh' ? '主导航' : 'Main navigation'}>
+    {navItems.map((item) => (
+      <a href={item.href} aria-current={currentPath === item.href ? 'page' : undefined}>{item.label}</a>
+    ))}
+  </nav>
+
+  <LanguageToggle currentLocale={locale} currentPath={currentPath} alternatePath={alternatePath} />
+</header>

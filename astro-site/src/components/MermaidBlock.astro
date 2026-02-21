@@ -1,0 +1,26 @@
+---
+interface Props {
+  id: string;
+  code: string;
+}
+
+const { id, code } = Astro.props;
+---
+
+<pre id={id} data-mermaid-block style="overflow:auto;"><code>{code}</code></pre>
+
+<script type="module" is:inline>
+  const blocks = document.querySelectorAll('[data-mermaid-block]');
+  if (blocks.length > 0) {
+    const mermaid = await import('https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs');
+    mermaid.default.initialize({ startOnLoad: false, theme: 'default' });
+
+    for (const block of blocks) {
+      if (block.dataset.mermaidRendered === 'true') continue;
+      const code = block.querySelector('code')?.textContent || '';
+      const id = block.id || `mermaid-${Math.random().toString(36).slice(2, 9)}`;
+      const { svg } = await mermaid.default.render(id, code);
+      block.outerHTML = svg;
+    }
+  }
+</script>

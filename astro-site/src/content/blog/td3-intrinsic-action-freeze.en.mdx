@@ -1,0 +1,105 @@
+---
+title: "When Intrinsic Reward Meets Action Freeze: A TD3 Mechanism Note"
+summary: "Toy evidence on why intrinsic signals can move value estimates without changing policy actions."
+date: 2026-02-16
+slug: "td3-intrinsic-action-freeze-en"
+canonicalSlug: "td3-intrinsic-action-freeze"
+tags:
+  - td3
+  - intrinsic reward
+  - reinforcement learning
+  - risk modeling
+locale: en
+cover: "fig_action_gap_phase"
+---
+
+import PlotlyBlock from '@/components/PlotlyBlock.astro';
+import MermaidBlock from '@/components/MermaidBlock.astro';
+import figAction from '@/assets/blog/td3-intrinsic-toy/fig_action_gap_phase.png';
+import figGate from '@/assets/blog/td3-intrinsic-toy/fig_gate_and_scale.png';
+
+## The Core Puzzle
+
+In trading-oriented RL experiments, `intrinsic_mean_delta_mean` can be clearly non-zero while policy actions remain almost unchanged.
+
+<MermaidBlock id="mermaid-overview-en" code={`flowchart LR
+  A[Intrinsic Reward] --> B[Critic Value Shift]
+  B --> C{Action Ranking Flips?}
+  C -->|No| D[Policy Remains Frozen]
+  C -->|Yes| E[Policy Changes]
+`} />
+
+The key question is whether intrinsic terms actually cross the action-ranking threshold.
+
+## 1. Action-gap Threshold
+
+The total reward is
+
+$$
+r_t^{tot} = r_t^{env} + w r_t^{int}.
+$$
+
+Action flips require the action-dependent intrinsic term to exceed the environment gap:
+
+$$
+w\cdot\sup_{a_1,a_2}|\Delta^\mu(s,a_1)-\Delta^\mu(s,a_2)| < m(s).
+$$
+
+<img src={figAction.src} alt="Action-gap phase boundary" />
+
+## 2. Tanh Gating and Gradient Collapse
+
+For TD3 actor
+
+$$
+a=a_{max}\tanh(u),\quad
+\kappa(s)=1-\left(\frac{a}{a_{max}}\right)^2.
+$$
+
+As $|a|\to a_{max}$, $\kappa\to0$, which suppresses effective policy gradients.
+
+<img src={figGate.src} alt="Gate and scale effects" />
+
+## 3. Scale Imbalance Chain
+
+Scale imbalance inflates pre-activation variance, raises saturation probability, and reduces small-signal transport.
+
+<MermaidBlock id="mermaid-td3-en" code={`flowchart TD
+  A[Scale Imbalance] --> B[Var(u) Increases]
+  B --> C[Saturation Probability Increases]
+  C --> D[Mean Gate Decreases]
+  D --> E[Intrinsic Gradient Transport Drops]
+`} />
+
+## 4. Toy Metric Sketch
+
+<PlotlyBlock
+  id="plotly-td3-en"
+  spec={{
+    data: [
+      {
+        x: ['ratio=1', 'ratio=100'],
+        y: [0.481, 0.007],
+        type: 'bar',
+        name: 'E[kappa] without norm',
+        marker: { color: '#0E7490' }
+      },
+      {
+        x: ['ratio=1', 'ratio=100'],
+        y: [0.481, 0.480],
+        type: 'bar',
+        name: 'E[kappa] with norm',
+        marker: { color: '#B45309' }
+      }
+    ],
+    layout: {
+      title: { text: 'Gate Collapse vs Recovery' },
+      barmode: 'group',
+      yaxis: { title: { text: 'Mean Gate' } }
+    }
+  }}
+/>
+
+## Takeaway
+
+Toy evidence supports a three-link mechanism: **action-gap threshold**, **tanh gating decay**, and **scale-imbalance amplification**. A non-zero intrinsic signal alone does not guarantee policy behavioral change.

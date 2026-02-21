@@ -1,0 +1,21 @@
+main:
+  - title: "About"
+    url: /about/
+
+  - title: "Publications"
+    url: /publications/
+
+  - title: "Projects"
+    url: /portfolio/
+
+  - title: "Talks"
+    url: /talks/
+
+  - title: "Teaching"
+    url: /teaching/
+
+  - title: "Blog"
+    url: /blog/
+
+  - title: "CV"
+    url: /files/CV.pdf

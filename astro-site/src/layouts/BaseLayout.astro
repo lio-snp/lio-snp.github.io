@@ -1,0 +1,90 @@
+---
+import SiteNav from '@/components/SiteNav.astro';
+import type { Locale } from '@/types/locale';
+import '@/styles/global.css';
+
+interface Props {
+  title: string;
+  description: string;
+  locale: Locale;
+  currentPath: string;
+  alternatePath: string;
+}
+
+const { title, description, locale, currentPath, alternatePath } = Astro.props;
+---
+
+<!doctype html>
+<html lang={locale}>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={`https://liosnp.github.io${currentPath}`} />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={`https://liosnp.github.io${currentPath}`} />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:opsz,wght@8..60,300;8..60,400;8..60,600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  </head>
+  <body data-current-locale={locale} data-current-path={currentPath} data-alt-path={alternatePath}>
+    <div class="site-shell">
+      <SiteNav locale={locale} currentPath={currentPath} alternatePath={alternatePath} />
+      <main>
+        <slot />
+      </main>
+      <footer class="page-footer">
+        {locale === 'zh' ? 'Built with Astro · Hybrid Scholarly Design System' : 'Built with Astro · Hybrid Scholarly Design System'}
+      </footer>
+    </div>
+
+    <script is:inline>
+      const body = document.body;
+      const currentLocale = body.dataset.currentLocale;
+      const currentPath = body.dataset.currentPath || '/';
+      const altPath = body.dataset.altPath || '/';
+      const saved = localStorage.getItem('site_lang');
+
+      if (!saved) {
+        localStorage.setItem('site_lang', currentLocale || 'zh');
+      }
+
+      const isRootPair = currentPath === '/' || currentPath === '/en/';
+      if (isRootPair && saved && currentLocale && saved !== currentLocale) {
+        window.location.replace(altPath);
+      }
+
+      const revealNodes = [...document.querySelectorAll('main > .section-card, .blog-card, .year-group')];
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      if (prefersReducedMotion) {
+        revealNodes.forEach((node) => node.classList.add('revealed'));
+      } else if (revealNodes.length > 0) {
+        revealNodes.forEach((node, index) => {
+          node.setAttribute('data-reveal', '');
+          node.style.setProperty('--reveal-delay', `${Math.min(index * 50, 280)}ms`);
+        });
+
+        const observer = new IntersectionObserver(
+          (entries, obs) => {
+            entries.forEach((entry) => {
+              if (!entry.isIntersecting) return;
+              entry.target.classList.add('revealed');
+              obs.unobserve(entry.target);
+            });
+          },
+          {
+            rootMargin: '0px 0px -9% 0px',
+            threshold: 0.18
+          }
+        );
+
+        revealNodes.forEach((node) => observer.observe(node));
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,81 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import BlogCard from '@/components/BlogCard.astro';
+import { getBlogEntries } from '@/lib/content';
+import { sortBlogByDate } from '@/lib/site';
+
+const posts = sortBlogByDate(await getBlogEntries('en'));
+const tags = [...new Set(posts.flatMap((post) => post.data.tags))].sort();
+
+const postsByYear = posts.reduce<Record<string, typeof posts>>((acc, post) => {
+  const year = String(post.data.date.getFullYear());
+  if (!acc[year]) acc[year] = [];
+  acc[year].push(post);
+  return acc;
+}, {});
+---
+
+<BaseLayout
+  title="Blog · Yanlin (Leo)"
+  description="Research notes, experiment audits, and mechanism-focused writeups."
+  locale="en"
+  currentPath="/en/blog/"
+  alternatePath="/blog/"
+>
+  <section class="section-card">
+    <p class="section-kicker">Blog</p>
+    <h1 class="section-title">Research Notes and Mechanism Breakdowns</h1>
+
+    <div class="tag-filter" data-tag-filter>
+      <button type="button" class="active" data-tag="all">All</button>
+      {tags.map((tag) => (
+        <button type="button" data-tag={tag}>{tag}</button>
+      ))}
+    </div>
+
+    <div class="year-groups" data-post-list>
+      {Object.entries(postsByYear)
+        .sort(([a], [b]) => Number(b) - Number(a))
+        .map(([year, yearPosts]) => (
+          <section class="year-group" data-year-group>
+            <header class="year-header">
+              <span class="year-pin" aria-hidden="true"></span>
+              <h2 class="year-title">{year}</h2>
+            </header>
+            <div class="blog-list">
+              {yearPosts.map((post) => <BlogCard post={post} locale="en" />)}
+            </div>
+          </section>
+        ))}
+    </div>
+  </section>
+
+  <script is:inline>
+    const filter = document.querySelector('[data-tag-filter]');
+    const cards = [...document.querySelectorAll('[data-post-card]')];
+    const yearGroups = [...document.querySelectorAll('[data-year-group]')];
+
+    if (filter && cards.length > 0) {
+      filter.querySelectorAll('button').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const selected = btn.getAttribute('data-tag') || 'all';
+          filter.querySelectorAll('button').forEach((x) => x.classList.remove('active'));
+          btn.classList.add('active');
+
+          cards.forEach((card) => {
+            const tags = (card.getAttribute('data-tags') || '').split(',');
+            const visible = selected === 'all' || tags.includes(selected);
+            card.style.display = visible ? '' : 'none';
+          });
+
+          yearGroups.forEach((group) => {
+            const hasVisibleCard = [...group.querySelectorAll('[data-post-card]')].some(
+              (card) => card.style.display !== 'none'
+            );
+            group.style.display = hasVisibleCard ? '' : 'none';
+          });
+        });
+      });
+    }
+  </script>
+</BaseLayout>

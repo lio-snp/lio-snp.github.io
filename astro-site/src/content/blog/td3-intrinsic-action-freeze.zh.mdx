@@ -1,0 +1,106 @@
+---
+title: "当内生奖励遇到动作冻结：TD3 的可解释机制"
+summary: "用 toy 模型解释为什么 intrinsic signal 可以改变 value，却未必改变 policy action。"
+date: 2026-02-16
+slug: "td3-intrinsic-action-freeze-zh"
+canonicalSlug: "td3-intrinsic-action-freeze"
+tags:
+  - td3
+  - intrinsic reward
+  - reinforcement learning
+  - risk modeling
+locale: zh
+cover: "fig_action_gap_phase"
+---
+
+import PlotlyBlock from '@/components/PlotlyBlock.astro';
+import MermaidBlock from '@/components/MermaidBlock.astro';
+import figAction from '@/assets/blog/td3-intrinsic-toy/fig_action_gap_phase.png';
+import figGate from '@/assets/blog/td3-intrinsic-toy/fig_gate_and_scale.png';
+
+## 核心问题
+
+在交易类 RL 实验中，我们经常看到：`intrinsic_mean_delta_mean` 明显非零，但策略行为几乎不变，甚至长期贴边。
+
+<MermaidBlock id="mermaid-overview-zh" code={`flowchart LR
+  A[Intrinsic Reward] --> B[Critic Value Shift]
+  B --> C{Action Ranking Flips?}
+  C -->|No| D[Policy Remains Frozen]
+  C -->|Yes| E[Policy Changes]
+`} />
+
+上图对应一个关键判断：内生项是否真正跨过了动作排序阈值。
+
+## 1. Action-gap 阈值
+
+总奖励写作
+
+$$
+r_t^{tot} = r_t^{env} + w r_t^{int}.
+$$
+
+真正决定动作翻转的是动作相关项是否超过环境 gap：
+
+$$
+w\cdot\sup_{a_1,a_2}|\Delta^\mu(s,a_1)-\Delta^\mu(s,a_2)| < m(s).
+$$
+
+<img src={figAction.src} alt="Action-gap phase boundary" />
+
+## 2. Tanh 门控与梯度坍缩
+
+TD3 actor 常写为：
+
+$$
+a=a_{max}\tanh(u),\quad
+\kappa(s)=1-\left(\frac{a}{a_{max}}\right)^2.
+$$
+
+当 $|a|\to a_{max}$ 时，$\kappa\to0$，有效梯度被门控压缩。
+
+<img src={figGate.src} alt="Gate and scale effects" />
+
+## 3. 量纲失衡链路
+
+尺度失衡会导致 pre-activation 方差增大，饱和概率上升，进一步削弱小信号传输。
+
+<MermaidBlock id="mermaid-td3-zh" code={`flowchart TD
+  A[Scale Imbalance] --> B[Var(u) Increases]
+  B --> C[Saturation Probability Increases]
+  C --> D[Mean Gate Decreases]
+  D --> E[Intrinsic Gradient Transport Drops]
+`} />
+
+## 4. Toy 指标示意
+
+<PlotlyBlock
+  id="plotly-td3-zh"
+  spec={{
+    data: [
+      {
+        x: ['ratio=1', 'ratio=100'],
+        y: [0.481, 0.007],
+        type: 'bar',
+        name: 'E[kappa] without norm',
+        marker: { color: '#0E7490' }
+      },
+      {
+        x: ['ratio=1', 'ratio=100'],
+        y: [0.481, 0.480],
+        type: 'bar',
+        name: 'E[kappa] with norm',
+        marker: { color: '#B45309' }
+      }
+    ],
+    layout: {
+      title: { text: 'Gate Collapse vs Recovery' },
+      barmode: 'group',
+      yaxis: { title: { text: 'Mean Gate' } }
+    }
+  }}
+/>
+
+## 结论
+
+这个 toy 证据支持三段机制链：**action gap 阈值**、**tanh 门控衰减**、**量纲失衡放大**。
+在真实系统中，仅看到 intrinsic 非零并不足以证明策略已经学到新行为。
