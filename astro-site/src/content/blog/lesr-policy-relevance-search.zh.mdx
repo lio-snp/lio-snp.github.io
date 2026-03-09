@@ -1,0 +1,192 @@
+---
+title: "从“非零 intrinsic”到“策略相关”：重写 LESR 的候选搜索"
+summary: "2026 年 3 月 9 日的 LESR smoke runs 暴露出一个更具体的问题：intrinsic 数值非零，并不意味着它能改变 policy。本文把这个现象整理成一个更可操作的研究问题，并解释为什么候选打分需要显式奖励 policy-relevant intrinsic。"
+date: 2026-03-09
+slug: "lesr-policy-relevance-search-zh"
+canonicalSlug: "lesr-policy-relevance-search"
+tags:
+  - lesr
+  - intrinsic reward
+  - trading RL
+  - candidate search
+locale: zh
+cover: "fig_intrinsic_nonzero_policy_zero"
+---
+
+import figNonzero from '@/assets/blog/lesr-policy-relevance-search/fig_intrinsic_nonzero_policy_zero.png';
+import figSmoke from '@/assets/blog/lesr-policy-relevance-search/fig_step52_step53_smoke_delta_dcr.png';
+
+## 研究起点
+
+[上一篇短文](/blog/td3-intrinsic-action-freeze/)讨论的是一个 toy 机制问题：为什么 intrinsic signal 可以改变 value estimate，却未必改变 action。
+
+这篇新笔记讨论的是更靠近 LESR 搜索器的问题：在候选筛选阶段，我们为什么会反复遇到“`intrinsic_mean` 明明非零，但 `G3` 和 `G1` 几乎完全一样”的候选？
+
+本文只使用当前实验仓库中截至 **2026 年 3 月 9 日** 的实际材料，不补额外故事。
+
+## 1. 症状：non-zero intrinsic，zero policy delta
+
+先约定三组：
+
+- `G0`: baseline
+- `G1`: revise state only
+- `G3`: revise state + intrinsic reward
+
+在 2026 年 3 月 9 日整理的 8 组 smoke runs 里（`step52` 与 `step53`，`selected_4` 与 `composite`，四个算法各一列），有 `30/32` 个 algorithm cells 同时满足两件事：
+
+1. `G1` 与 `G3` 的 `Sharpe / CR / MDD / AV` 完全相同；
+2. 但 `G3` 的 `intrinsic_mean` 经常明显非零。
+
+<figure style="margin:1.2rem 0 1.45rem;">
+  <img src={figNonzero.src} alt="Non-zero intrinsic but zero policy delta across recent LESR smoke runs" />
+  <figcaption style="margin-top:0.55rem; color:var(--text-muted); font-size:0.92rem;">
+    每个点对应一个 algorithm cell。横轴是 <code>|intrinsic_mean_G3|</code>，纵轴是
+    <code>Δ(Sharpe+CR)=G3-G1</code>。大量样本落在 <code>y=0</code> 上，同时 <code>x&gt;0</code>，
+    说明 intrinsic 在数值上“存在”，但没有转化成可观测的 policy delta。
+  </figcaption>
+</figure>
+
+图里最重要的不是点有多分散，而是很多样本同时满足“非零 intrinsic”和“零增量行为变化”。
+
+<details>
+  <summary>这张图具体用了哪些 runs？</summary>
+  <p>
+    统计对象来自 2026 年 3 月 9 日的 8 组 smoke runs，包括
+    <code>20260309_030448_341_e83c_demo</code>、
+    <code>20260309_032439_104_063f_demo</code>、
+    <code>20260309_044041_508_379f_demo</code>、
+    <code>20260309_050325_581_8315_demo</code>、
+    <code>20260309_055826_580_52c4_demo</code>、
+    <code>20260309_061403_334_80ed_demo</code>、
+    <code>20260309_075402_693_281a_demo</code> 和
+    <code>20260309_081248_960_ffd4_demo</code>。这些都是短预算 smoke 配置，典型预算为
+    <code>n_small=8</code>、<code>n_full=30</code>。
+  </p>
+</details>
+
+## 2. 一阶判据：什么才算 policy-relevant intrinsic
+
+把 critic 面对的总价值近似写成
+
+$$
+Q_{tot}(s,a)=Q_{env}(s,a)+wB(s)+w\Delta(s,a).
+$$
+
+这里的 `B(s)` 可以理解为只依赖状态的 baseline-like 项，而 `\Delta(s,a)` 才是会改变动作排序的 action-dependent 项。策略真正关心的是
+
+$$
+a^\star(s)=\arg\max_a Q_{tot}(s,a).
+$$
+
+因此，`intrinsic_reward(s)\neq 0` 只说明 $Q_{tot}$ 的 level 变了；要让动作真的变，必须让
+
+$$
+w\cdot\bigl(\Delta(s,a_1)-\Delta(s,a_2)\bigr)
+$$
+
+大到足以跨过环境自身的 action gap。
+
+换句话说：
+
+$$
+\text{non-zero intrinsic} \not\Rightarrow \text{policy-relevant intrinsic}.
+$$
+
+这和上一篇 toy 文是连续的。上一篇解释了“为什么 value 会动而 action 不动”；这里进一步问：**为什么搜索器还会把这种候选当成有效信号？**
+
+## 3. 这如何反过来重写 LESR 的候选打分
+
+如果候选搜索只奖励 short-budget 下的总分上涨，它很容易偏向两类“伪有效”候选：
+
+- 只抬高 value level、但不改动作排序的候选；
+- intrinsic 数值很活跃，但在 raw-policy control 下几乎不会改变 action 的候选。
+
+这也是为什么当前 LESR scorer 不再只看 `Sharpe + CR`，而逐步演化成近似下面的形式：
+
+$$
+S(c)=\lambda_{perf}\Delta_{G3-G0}(c)+\lambda_{lip}\frac{1}{1+L(c)}+\lambda_{beh}B(c)+\lambda_{probe}P(c).
+$$
+
+其中：
+
+- $\Delta_{G3-G0}$：相对 baseline 的 performance delta；
+- $L(c)$：intrinsic 的 Lipschitz proxy，用来惩罚脆弱、过尖的候选；
+- $B(c)$：动作行为稳健性分数，用 near-bound ratio、entropy、unique action count 去约束 collapse；
+- $P(c)$：在 raw-policy control 下做的 intrinsic probe，直接问“如果 policy 侧先不帮忙，这条 intrinsic 通道还有没有用？”。
+
+这个变化的重点不是“分数更复杂”，而是搜索目标第一次显式区分了 **numeric activity** 和 **policy relevance**。
+
+同一批 March 9 runs 里，prompt 侧也开始故意混合 `intrinsic_first`、`balanced` 和 `state_first` 三类候选供给。目标不再是“多生成一些 intrinsic”，而是“多生成一些在 raw-policy control 下仍然有用的 intrinsic”。
+
+## 4. 第二个现象：setup 仍然决定 LESR 能否把这个信号用出来
+
+即便把搜索目标改得更接近 policy relevance，结果也不是“到处都涨”。在同一天的 step53 smoke 中，`selected_4` 和 `composite` 分化得很明显。
+
+<figure style="margin:1.2rem 0 1.45rem;">
+  <img src={figSmoke.src} alt="Step52 vs step53 smoke comparison for delta DCR across selected4 and composite setups" />
+  <figcaption style="margin-top:0.55rem; color:var(--text-muted); font-size:0.92rem;">
+    这是一张 diagnostic figure，而不是正式 benchmark。它比较了 step52 与 step53 smoke 中
+    <code>Δ(Sharpe+CR)=G3-G0</code> 的变化，用来观察候选供给改动后 selected4 与 composite 的分化。
+  </figcaption>
+</figure>
+
+更具体地说，在 2026 年 3 月 9 日的 step53 两组 runs 中，结果是这样的：
+
+<div style="overflow-x:auto; margin:1rem 0 1.3rem;">
+  <table style="width:100%; min-width:640px; border-collapse:collapse; font-size:0.92rem;">
+    <thead>
+      <tr>
+        <th style="text-align:left; padding:0.55rem 0.65rem; border-bottom:1px solid var(--border-subtle);">setup</th>
+        <th style="text-align:left; padding:0.55rem 0.65rem; border-bottom:1px solid var(--border-subtle);">algo</th>
+        <th style="text-align:right; padding:0.55rem 0.65rem; border-bottom:1px solid var(--border-subtle);">Δ(Sharpe+CR)<br />G3-G0</th>
+        <th style="text-align:right; padding:0.55rem 0.65rem; border-bottom:1px solid var(--border-subtle);">intrinsic_mean<br />G3</th>
+        <th style="text-align:center; padding:0.55rem 0.65rem; border-bottom:1px solid var(--border-subtle);">G1 = G3?</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td style="padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">selected_4</td><td style="padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">a2c</td><td style="text-align:right; padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">-0.032</td><td style="text-align:right; padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">-0.121</td><td style="text-align:center; padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">yes</td></tr>
+      <tr><td style="padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">selected_4</td><td style="padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">ppo</td><td style="text-align:right; padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">-0.218</td><td style="text-align:right; padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">-13.792</td><td style="text-align:center; padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">yes</td></tr>
+      <tr><td style="padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">selected_4</td><td style="padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">sac</td><td style="text-align:right; padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">-0.147</td><td style="text-align:right; padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">-0.135</td><td style="text-align:center; padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">yes</td></tr>
+      <tr><td style="padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">selected_4</td><td style="padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">td3</td><td style="text-align:right; padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">-0.632</td><td style="text-align:right; padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">-4.982</td><td style="text-align:center; padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">yes</td></tr>
+      <tr><td style="padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">composite</td><td style="padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">a2c</td><td style="text-align:right; padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">1.022</td><td style="text-align:right; padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">9.115</td><td style="text-align:center; padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">yes</td></tr>
+      <tr><td style="padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">composite</td><td style="padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">ppo</td><td style="text-align:right; padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">0.448</td><td style="text-align:right; padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">0.038</td><td style="text-align:center; padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">yes</td></tr>
+      <tr><td style="padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">composite</td><td style="padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">sac</td><td style="text-align:right; padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">1.557</td><td style="text-align:right; padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">0.025</td><td style="text-align:center; padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">yes</td></tr>
+      <tr><td style="padding:0.48rem 0.65rem;">composite</td><td style="padding:0.48rem 0.65rem;">td3</td><td style="text-align:right; padding:0.48rem 0.65rem;">0.205</td><td style="text-align:right; padding:0.48rem 0.65rem;">-10.736</td><td style="text-align:center; padding:0.48rem 0.65rem;">yes</td></tr>
+    </tbody>
+  </table>
+</div>
+
+这张表最值得记住的是一句话：**setup 会改变整体增益的正负号，但 “non-zero intrinsic yet zero policy delta” 仍然是一个独立问题。**
+
+同一天的 best family 也不是统一的：`selected_4` 中 A2C/TD3 更偏 `risk_shield`，PPO/SAC 更偏 `trend_follow`；到了 `composite`，PPO 又切到 `risk_shield`，SAC 切到 `mean_revert`。这更像“policy relevance 是算法条件化的”，而不是一个全局 best candidate 问题。
+
+## 5. 现在这个问题更像什么研究问题
+
+按现在的证据，我更愿意把后续工作写成下面三个研究问题，而不是直接喊“LESR 全面提收益”：
+
+1. **如何直接度量 candidate 的 policy relevance？**  
+   比如 action-ranking flip rate、raw-policy probe delta、或更直接的 control-sensitive counterfactual。
+
+2. **为什么 `composite` 比 `selected_4` 更容易把 LESR 的信号转成正增益？**  
+   这更像 state separability 与横截面差异是否足够，而不只是 intrinsic 大小问题。
+
+3. **为什么不同算法会选择不同的 candidate family？**  
+   如果 per-algo branch 才能稳定选到 policy-relevant 候选，那么“跨算法蒸馏”本身也会变成一个方法问题。
+
+## 限制
+
+- 这里主要用的是 smoke evidence，不是 confirmatory benchmark。
+- 关键 runs 都是短预算配置，典型预算为 `n_small=8`、`n_full=30`。
+- 这些结果更适合支持“现象成立”和“搜索器需要改目标”这两个结论，不适合直接支持“方法已经彻底解决”。
+
+## 结论
+
+如果把 LESR 的目标说得更精确，它不是“只要 intrinsic 非零就有正增益”，而是：
+
+> 只有当 state rewrite 和 intrinsic term 一起改变了 **control-relevant ordering**，LESR 才有机会形成稳定正增益。
+
+因此，眼下最重要的工程任务不是“让 intrinsic 更大”，而是：
+
+- 让 intrinsic 更 **policy-relevant**；
+- 在候选筛选阶段就把这种相关性 **直接测出来**；
+- 再去讨论它在哪些 regime、哪些算法、哪些 universe setup 下会转成稳定收益。

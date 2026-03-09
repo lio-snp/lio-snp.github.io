@@ -1,0 +1,192 @@
+---
+title: "From Non-Zero Intrinsic to Policy Relevance: Rewriting LESR Candidate Search"
+summary: "LESR smoke runs on March 9, 2026 exposed a sharper problem: a non-zero intrinsic signal does not necessarily change policy behavior. This note turns that observation into a more useful research question and explains why candidate scoring now needs to reward policy-relevant intrinsic terms explicitly."
+date: 2026-03-09
+slug: "lesr-policy-relevance-search-en"
+canonicalSlug: "lesr-policy-relevance-search"
+tags:
+  - lesr
+  - intrinsic reward
+  - trading RL
+  - candidate search
+locale: en
+cover: "fig_intrinsic_nonzero_policy_zero"
+---
+
+import figNonzero from '@/assets/blog/lesr-policy-relevance-search/fig_intrinsic_nonzero_policy_zero.png';
+import figSmoke from '@/assets/blog/lesr-policy-relevance-search/fig_step52_step53_smoke_delta_dcr.png';
+
+## Research Origin
+
+The [previous note](/en/blog/td3-intrinsic-action-freeze/) focused on a toy mechanism question: why an intrinsic signal can move value estimates without changing actions.
+
+This new note moves one step closer to the LESR search loop itself: why do we keep finding candidates whose `intrinsic_mean` is clearly non-zero while `G3` is almost indistinguishable from `G1`?
+
+Everything below is grounded in the current experiment workspace as of **March 9, 2026**.
+
+## 1. Symptom: non-zero intrinsic, zero policy delta
+
+I will use the usual three-group shorthand:
+
+- `G0`: baseline
+- `G1`: revise state only
+- `G3`: revise state plus intrinsic reward
+
+Across 8 smoke runs collected on March 9, 2026 (`step52` and `step53`, `selected_4` and `composite`, four algorithms each), `30/32` algorithm cells satisfy both of the following:
+
+1. `G1` and `G3` have exactly the same `Sharpe / CR / MDD / AV`;
+2. `G3` still shows a clearly non-zero `intrinsic_mean`.
+
+<figure style="margin:1.2rem 0 1.45rem;">
+  <img src={figNonzero.src} alt="Non-zero intrinsic but zero policy delta across recent LESR smoke runs" />
+  <figcaption style="margin-top:0.55rem; color:var(--text-muted); font-size:0.92rem;">
+    Each dot is one algorithm cell. The x-axis is <code>|intrinsic_mean_G3|</code>, and the y-axis is
+    <code>Δ(Sharpe+CR)=G3-G1</code>. Many samples sit exactly on <code>y=0</code> while still having
+    <code>x&gt;0</code>, meaning the intrinsic channel is numerically active but behaviorally irrelevant.
+  </figcaption>
+</figure>
+
+The key pattern is not the spread of the scatter. It is the existence of many cases where the intrinsic term is numerically present and the policy delta is still zero.
+
+<details>
+  <summary>Which runs are included here?</summary>
+  <p>
+    The figure aggregates 8 smoke runs from March 9, 2026:
+    <code>20260309_030448_341_e83c_demo</code>,
+    <code>20260309_032439_104_063f_demo</code>,
+    <code>20260309_044041_508_379f_demo</code>,
+    <code>20260309_050325_581_8315_demo</code>,
+    <code>20260309_055826_580_52c4_demo</code>,
+    <code>20260309_061403_334_80ed_demo</code>,
+    <code>20260309_075402_693_281a_demo</code>, and
+    <code>20260309_081248_960_ffd4_demo</code>. These are short-budget smoke configurations, typically
+    <code>n_small=8</code> and <code>n_full=30</code>.
+  </p>
+</details>
+
+## 2. A first-principles test: what counts as policy-relevant intrinsic?
+
+Write the critic-side total value as
+
+$$
+Q_{tot}(s,a)=Q_{env}(s,a)+wB(s)+w\Delta(s,a).
+$$
+
+Here `B(s)` is a baseline-like state-only term, while `\Delta(s,a)` is the action-dependent part that can change action ranking. The policy only cares about
+
+$$
+a^\star(s)=\arg\max_a Q_{tot}(s,a).
+$$
+
+So `intrinsic_reward(s)\neq 0` only tells us that the level of $Q_{tot}$ moved. To actually change the chosen action, we need
+
+$$
+w\cdot\bigl(\Delta(s,a_1)-\Delta(s,a_2)\bigr)
+$$
+
+to exceed the environment's own action gap.
+
+In short,
+
+$$
+\text{non-zero intrinsic} \not\Rightarrow \text{policy-relevant intrinsic}.
+$$
+
+This is continuous with the previous toy note. That note explained why value can move while action stays fixed. This one asks the next question: **why should the searcher treat such a candidate as useful at all?**
+
+## 3. How this rewrites LESR candidate scoring
+
+If candidate search only rewards short-budget score gains, it will over-select two kinds of false positives:
+
+- candidates that mostly shift value levels without changing action ranking;
+- candidates whose intrinsic channel is numerically active but almost useless under raw-policy control.
+
+That is why the current LESR scorer no longer looks only at `Sharpe + CR`. It is evolving toward a composite objective of the form
+
+$$
+S(c)=\lambda_{perf}\Delta_{G3-G0}(c)+\lambda_{lip}\frac{1}{1+L(c)}+\lambda_{beh}B(c)+\lambda_{probe}P(c).
+$$
+
+where
+
+- $\Delta_{G3-G0}$ is performance delta to baseline;
+- $L(c)$ is an intrinsic Lipschitz proxy to penalize brittle candidates;
+- $B(c)$ is action-behavior robustness, built from near-bound ratio, entropy, and action diversity;
+- $P(c)$ is an intrinsic probe under raw-policy control, directly asking whether the intrinsic path still helps when the policy side is held fixed.
+
+The point is not that the score became more complicated. The point is that the search target now explicitly separates **numeric activity** from **policy relevance**.
+
+The March 9 runs also changed candidate supply on the prompt side by intentionally mixing `intrinsic_first`, `balanced`, and `state_first` designs. The goal was no longer "produce more intrinsic candidates", but "produce more intrinsic candidates that remain useful under raw-policy control."
+
+## 4. A second observation: setup still decides whether LESR can convert that signal into gains
+
+Even after moving the search target closer to policy relevance, results do not improve everywhere. On the same day, the step53 smoke runs split sharply between `selected_4` and `composite`.
+
+<figure style="margin:1.2rem 0 1.45rem;">
+  <img src={figSmoke.src} alt="Step52 vs step53 smoke comparison for delta DCR across selected4 and composite setups" />
+  <figcaption style="margin-top:0.55rem; color:var(--text-muted); font-size:0.92rem;">
+    This is a diagnostic figure, not a confirmatory benchmark. It compares <code>Δ(Sharpe+CR)=G3-G0</code>
+    between step52 and step53 smoke runs, showing how supply-side changes behaved differently in the two setups.
+  </figcaption>
+</figure>
+
+More concretely, the two step53 runs from March 9, 2026 look like this:
+
+<div style="overflow-x:auto; margin:1rem 0 1.3rem;">
+  <table style="width:100%; min-width:640px; border-collapse:collapse; font-size:0.92rem;">
+    <thead>
+      <tr>
+        <th style="text-align:left; padding:0.55rem 0.65rem; border-bottom:1px solid var(--border-subtle);">setup</th>
+        <th style="text-align:left; padding:0.55rem 0.65rem; border-bottom:1px solid var(--border-subtle);">algo</th>
+        <th style="text-align:right; padding:0.55rem 0.65rem; border-bottom:1px solid var(--border-subtle);">Δ(Sharpe+CR)<br />G3-G0</th>
+        <th style="text-align:right; padding:0.55rem 0.65rem; border-bottom:1px solid var(--border-subtle);">intrinsic_mean<br />G3</th>
+        <th style="text-align:center; padding:0.55rem 0.65rem; border-bottom:1px solid var(--border-subtle);">G1 = G3?</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td style="padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">selected_4</td><td style="padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">a2c</td><td style="text-align:right; padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">-0.032</td><td style="text-align:right; padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">-0.121</td><td style="text-align:center; padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">yes</td></tr>
+      <tr><td style="padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">selected_4</td><td style="padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">ppo</td><td style="text-align:right; padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">-0.218</td><td style="text-align:right; padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">-13.792</td><td style="text-align:center; padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">yes</td></tr>
+      <tr><td style="padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">selected_4</td><td style="padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">sac</td><td style="text-align:right; padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">-0.147</td><td style="text-align:right; padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">-0.135</td><td style="text-align:center; padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">yes</td></tr>
+      <tr><td style="padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">selected_4</td><td style="padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">td3</td><td style="text-align:right; padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">-0.632</td><td style="text-align:right; padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">-4.982</td><td style="text-align:center; padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">yes</td></tr>
+      <tr><td style="padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">composite</td><td style="padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">a2c</td><td style="text-align:right; padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">1.022</td><td style="text-align:right; padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">9.115</td><td style="text-align:center; padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">yes</td></tr>
+      <tr><td style="padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">composite</td><td style="padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">ppo</td><td style="text-align:right; padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">0.448</td><td style="text-align:right; padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">0.038</td><td style="text-align:center; padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">yes</td></tr>
+      <tr><td style="padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">composite</td><td style="padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">sac</td><td style="text-align:right; padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">1.557</td><td style="text-align:right; padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">0.025</td><td style="text-align:center; padding:0.48rem 0.65rem; border-bottom:1px solid color-mix(in oklab, var(--border-subtle) 70%, white 30%);">yes</td></tr>
+      <tr><td style="padding:0.48rem 0.65rem;">composite</td><td style="padding:0.48rem 0.65rem;">td3</td><td style="text-align:right; padding:0.48rem 0.65rem;">0.205</td><td style="text-align:right; padding:0.48rem 0.65rem;">-10.736</td><td style="text-align:center; padding:0.48rem 0.65rem;">yes</td></tr>
+    </tbody>
+  </table>
+</div>
+
+The most important sentence in this table is simple: **setup can flip the sign of the overall gain, while "non-zero intrinsic yet zero policy delta" remains a separate failure mode.**
+
+Best-family selection also does not converge to one global winner. In `selected_4`, A2C and TD3 leaned toward `risk_shield` while PPO and SAC leaned toward `trend_follow`. In `composite`, PPO shifted to `risk_shield` and SAC shifted to `mean_revert`. That makes the problem look algorithm-conditional rather than a single global-best candidate problem.
+
+## 5. What research questions does this point to now?
+
+Given the current evidence, I would frame the next stage as three research questions instead of claiming universal LESR gains:
+
+1. **How should we measure candidate policy relevance directly?**  
+   Possible directions include action-ranking flip rate, raw-policy probe delta, or more explicit control-sensitive counterfactuals.
+
+2. **Why does `composite` convert LESR signals into gains more easily than `selected_4`?**  
+   This looks more like a state-separability and cross-sectional variation question than a simple intrinsic magnitude question.
+
+3. **Why do different algorithms prefer different candidate families?**  
+   If stable policy-relevant selection requires per-algorithm branches, then cross-algorithm distillation becomes a method question of its own.
+
+## Limitations
+
+- This is smoke evidence, not a confirmatory benchmark.
+- The key runs are all short-budget configurations, typically `n_small=8` and `n_full=30`.
+- These results support the existence of a sharper failure mode and the need to change the search target. They do not support a claim that the method is already fully solved.
+
+## Conclusion
+
+If I phrase the LESR objective more precisely, it is not "any non-zero intrinsic should create gains." It is:
+
+> LESR only has a chance to generate stable positive gains when state rewriting and the intrinsic term jointly change the **control-relevant ordering** of actions.
+
+So the immediate engineering task is not "make intrinsic larger." It is to
+
+- make intrinsic more **policy-relevant**,
+- test that relevance **during candidate selection**,
+- and only then ask in which regimes, algorithms, and universe setups that relevance turns into stable returns.
