@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="620" viewBox="0 0 1200 620" fill="none">
+  <rect width="1200" height="620" rx="32" fill="#F7F3EA"/>
+  <rect x="40" y="40" width="1120" height="540" rx="28" fill="#FCFAF5" stroke="#D3CFC4" stroke-width="2"/>
+  <text x="74" y="96" fill="#0D1B2A" font-family="Arial, Helvetica, sans-serif" font-size="38" font-weight="700">Pre-LN vs Post-LN Gradient Transport</text>
+  <text x="74" y="130" fill="#64748B" font-family="Arial, Helvetica, sans-serif" font-size="20">Pre-LN keeps a direct identity path across depth. Post-LN inserts normalization Jacobians on the residual route.</text>
+
+  <rect x="96" y="188" width="420" height="304" rx="24" fill="#E7F4F8" stroke="#0E7490" stroke-width="2"/>
+  <text x="126" y="232" fill="#0D1B2A" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700">Pre-LN block</text>
+  <text x="126" y="276" fill="#0D1B2A" font-family="Arial, Helvetica, sans-serif" font-size="22">x_(l+1) = x_l + F_l(LN(x_l))</text>
+  <line x1="152" y1="344" x2="454" y2="344" stroke="#0E7490" stroke-width="5"/>
+  <text x="304" y="330" text-anchor="middle" fill="#0D1B2A" font-family="Arial, Helvetica, sans-serif" font-size="18">identity route survives depth</text>
+  <rect x="212" y="372" width="180" height="72" rx="16" fill="#FCFAF5" stroke="#0E7490" stroke-width="2"/>
+  <text x="302" y="416" text-anchor="middle" fill="#0D1B2A" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700">stable transport</text>
+
+  <rect x="684" y="188" width="420" height="304" rx="24" fill="#FFF5E8" stroke="#B45309" stroke-width="2"/>
+  <text x="714" y="232" fill="#0D1B2A" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700">Post-LN block</text>
+  <text x="714" y="276" fill="#0D1B2A" font-family="Arial, Helvetica, sans-serif" font-size="22">x_(l+1) = LN(x_l + F_l(x_l))</text>
+  <line x1="742" y1="344" x2="1022" y2="344" stroke="#B45309" stroke-width="5" stroke-dasharray="12 8"/>
+  <rect x="880" y="314" width="96" height="60" rx="14" fill="#FCFAF5" stroke="#B45309" stroke-width="2"/>
+  <text x="928" y="350" text-anchor="middle" fill="#0D1B2A" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700">LN</text>
+  <text x="882" y="404" fill="#0D1B2A" font-family="Arial, Helvetica, sans-serif" font-size="18">residual path multiplied by normalization Jacobian</text>
+  <rect x="812" y="430" width="218" height="72" rx="16" fill="#FCFAF5" stroke="#B45309" stroke-width="2"/>
+  <text x="921" y="474" text-anchor="middle" fill="#0D1B2A" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700">harder initialization</text>
+
+  <text x="96" y="548" fill="#64748B" font-family="Arial, Helvetica, sans-serif" font-size="19">Interpretation: the deeper the stack, the more Pre-LN benefits from a clean additive shortcut, while Post-LN repeatedly distorts the residual signal through normalization.</text>
+</svg>

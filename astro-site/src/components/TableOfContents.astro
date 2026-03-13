@@ -20,26 +20,35 @@ const { title } = Astro.props;
     const tocRoot = document.querySelector('[data-toc-root]');
     const details = tocRoot?.querySelector('[data-toc-details]');
     const list = tocRoot?.querySelector('[data-toc-list]');
-    if (!tocRoot || !list) return;
+    const usedIds = new Set();
 
     if (window.matchMedia('(max-width: 900px)').matches && details) {
       details.removeAttribute('open');
     }
+
+    if (!(tocRoot && list)) return;
 
     const headings = [...document.querySelectorAll('article h2')];
     const headingById = new Map();
     list.innerHTML = '';
 
     headings.forEach((heading) => {
-      if (!heading.id) {
-        heading.id = (heading.textContent || '')
+      const baseId =
+        heading.id ||
+        heading.textContent
           .toLowerCase()
           .replace(/[^a-z0-9\u4e00-\u9fa5\s-]/g, '')
           .trim()
           .replace(/\s+/g, '-');
-      }
-      if (!heading.id) return;
+      let nextId = baseId || 'section';
+      let index = 2;
 
+      while (usedIds.has(nextId)) {
+        nextId = `${baseId}-${index}`;
+        index += 1;
+      }
+      heading.id = nextId;
+      usedIds.add(nextId);
       headingById.set(heading.id, heading);
 
       const li = document.createElement('li');
@@ -74,6 +83,7 @@ const { title } = Astro.props;
         const visible = entries
           .filter((entry) => entry.isIntersecting)
           .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+
         if (visible && visible.target.id) {
           activateLink(visible.target.id);
         }
@@ -88,9 +98,5 @@ const { title } = Astro.props;
     if (headings[0]?.id) activateLink(headings[0].id);
   };
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initToc, { once: true });
-  } else {
-    initToc();
-  }
+  initToc();
 </script>

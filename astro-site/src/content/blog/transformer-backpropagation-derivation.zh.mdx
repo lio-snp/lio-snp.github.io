@@ -1,0 +1,627 @@
+---
+title: "Transformer 反向传播推导：统一形式、稳定性机制与 RL 联系"
+summary: "把注意力、LayerNorm、残差传输、FlashAttention backward，以及 RL/LLM 稳定性放进同一条计算图里的研究型技术笔记。"
+date: 2026-03-13
+canonicalSlug: "transformer-backpropagation-derivation"
+tags:
+  - llm cheating sheet
+locale: zh
+cover: "transformer-backprop-overview"
+---
+
+import overviewFig from '@/assets/blog/transformer-backpropagation/transformer-backprop-overview.svg';
+import flashFig from '@/assets/blog/transformer-backpropagation/flashattention-backward.svg';
+import stabilityFig from '@/assets/blog/transformer-backpropagation/preln-postln-stability.svg';
+
+## 为什么要重新整理这套推导
+
+很多 Transformer backward 笔记在局部上都是对的，但整体上是割裂的：一篇只讲 softmax 导数，一篇只写 LayerNorm 公式，还有一篇单独解释为什么 Pre-LN 更容易训练。真正缺少的，通常是把它们放回**同一张计算图**之后的统一理解。
+
+这篇文章面向这样一种读者：你已经知道 Transformer 的 forward，但你现在需要一版足够完整的 backward 视角，用于：
+
+1. 写论文里的推导部分，
+2. 对照工程实现，
+3. 排查训练不稳定，
+4. 以及理解为什么 LLM 上的 RL 训练会更脆弱。
+
+<div class="research-note">
+  <strong>核心判断。</strong> Transformer 训练之所以难，并不是因为某一个导数特别神秘，而是因为完整梯度必须穿过一整条链路：矩阵乘法、softmax 几何、归一化耦合、残差路由，以及有时还要再乘上 policy gradient 的上游缩放。因此正确的心智模型不是“很多公式”，而是“一张图里有若干个梯度瓶颈”。
+</div>
+
+## 统一符号与完整计算图
+
+设
+
+$$
+n = \text{sequence length}, \quad d = \text{model dimension}, \quad h = \text{number of heads}, \quad d_k = d_v = \frac{d}{h}.
+$$
+
+输入隐藏状态为
+
+$$
+X \in \mathbb{R}^{n \times d}.
+$$
+
+对于多头注意力，定义
+
+$$
+Q = XW_Q, \qquad K = XW_K, \qquad V = XW_V,
+$$
+
+其中
+
+$$
+W_Q, W_K, W_V, W_O \in \mathbb{R}^{d \times d}.
+$$
+
+单头注意力核心为
+
+$$
+S = \frac{QK^\top}{\sqrt{d_k}}, \qquad A = \operatorname{softmax}(S), \qquad O = AV.
+$$
+
+所有头拼接后，
+
+$$
+H = \operatorname{concat}(O^{(1)}, \dots, O^{(h)}), \qquad Y = HW_O.
+$$
+
+标准 encoder block 会进一步把 attention、residual、LayerNorm 和 FFN 连接起来。关键点在于：backward 只是沿着同一张图反向传播，但会在残差处分叉求和、在 softmax 处体现逐行几何结构。
+
+<figure>
+  <img src={overviewFig.src} alt="Transformer 前向与反向传播计算图概览" />
+  <figcaption>图 1. 一张压缩后的计算图视角：青色表示前向激活，琥珀色表示主要的反向梯度传输路径。</figcaption>
+</figure>
+
+全文统一记上游梯度为
+
+$$
+G_Z = \frac{\partial L}{\partial Z}.
+$$
+
+这样在多分支推导里更清楚。
+
+## 矩阵反向传播基本规则
+
+几乎整个 Transformer backward 的基础，都是最简单的线性映射
+
+$$
+Y = XW.
+$$
+
+于是有
+
+$$
+G_X = G_Y W^\top, \qquad G_W = X^\top G_Y.
+$$
+
+若带偏置，
+
+$$
+Y = XW + b,
+$$
+
+则
+
+$$
+G_b = \sum_{i=1}^{n} G_{Y, i:}.
+$$
+
+这里有两个实践上非常重要的结论。
+
+第一，attention 和 FFN 里的所有 projection，本质都只是这个公式的重复。
+
+第二，真正的分叉点是双线性结构。对于
+
+$$
+S = \frac{QK^\top}{\sqrt{d_k}},
+$$
+
+有
+
+$$
+G_Q = \frac{G_S K}{\sqrt{d_k}}, \qquad G_K = \frac{G_S^\top Q}{\sqrt{d_k}}.
+$$
+
+因此只要拿到了 $G_S$，score backward 又退化成一次标准矩阵乘法问题。
+
+## Attention Backward：从单头到多头
+
+从单头输出开始：
+
+$$
+O = AV.
+$$
+
+其梯度为
+
+$$
+G_A = G_O V^\top, \qquad G_V = A^\top G_O.
+$$
+
+真正非平凡的一步是逐行 softmax。对于一行 $a = \operatorname{softmax}(s)$，Jacobian 是
+
+$$
+J_{\text{softmax}}(s) = \operatorname{diag}(a) - aa^\top.
+$$
+
+若 $g = \frac{\partial L}{\partial a}$，则
+
+$$
+\frac{\partial L}{\partial s} = J_{\text{softmax}}(s) g = a \odot \Bigl(g - (a^\top g)\mathbf{1}\Bigr).
+$$
+
+这是工业实现中最常见、也最有用的写法。对整个 attention matrix 逐行应用，就得到
+
+$$
+G_S[i, :] = A[i, :] \odot \Bigl(G_A[i, :] - \langle A[i, :], G_A[i, :] \rangle \mathbf{1}\Bigr).
+$$
+
+接着 score backward 为
+
+$$
+G_Q = \frac{G_S K}{\sqrt{d_k}}, \qquad G_K = \frac{G_S^\top Q}{\sqrt{d_k}}.
+$$
+
+又因为
+
+$$
+Q = XW_Q, \qquad K = XW_K, \qquad V = XW_V,
+$$
+
+所以
+
+$$
+G_X^{(Q)} = G_Q W_Q^\top, \qquad G_{W_Q} = X^\top G_Q,
+$$
+
+$$
+G_X^{(K)} = G_K W_K^\top, \qquad G_{W_K} = X^\top G_K,
+$$
+
+$$
+G_X^{(V)} = G_V W_V^\top, \qquad G_{W_V} = X^\top G_V.
+$$
+
+最终单头输入梯度就是三路相加：
+
+$$
+G_X = G_X^{(Q)} + G_X^{(K)} + G_X^{(V)}.
+$$
+
+对于 multi-head attention，输出投影满足
+
+$$
+Y = HW_O,
+$$
+
+因此
+
+$$
+G_H = G_Y W_O^\top, \qquad G_{W_O} = H^\top G_Y.
+$$
+
+把 $G_H$ 再切回每个 head 后，head 内部可以独立反传，最后再在共享输入 $X$ 处求和。
+
+这一节最关键的系统结论是：attention backward 有两种完全不同的内存尺度。
+
+1. projection 的梯度是关于 $n$ 线性的，
+2. 但 score/probability tensor 是关于 $n$ 二次的。
+
+这就是为什么长上下文训练里，attention 往往先变成显存瓶颈，而不是先变成算力瓶颈。
+
+## LayerNorm Backward 与残差路径
+
+对单个 token 向量 $x \in \mathbb{R}^{d}$，LayerNorm 定义为
+
+$$
+\mu = \frac{1}{d}\sum_{j=1}^{d} x_j,
+$$
+
+$$
+\sigma^2 = \frac{1}{d}\sum_{j=1}^{d}(x_j - \mu)^2,
+$$
+
+$$
+\hat{x} = \frac{x - \mu}{\sqrt{\sigma^2 + \varepsilon}},
+$$
+
+输出为
+
+$$
+y = \gamma \odot \hat{x} + \beta.
+$$
+
+设上游梯度为 $g = \frac{\partial L}{\partial y}$，记
+
+$$
+\delta = g \odot \gamma.
+$$
+
+则输入梯度可写为
+
+$$
+\frac{\partial L}{\partial x}
+=
+\frac{1}{\sqrt{\sigma^2 + \varepsilon}}
+\Bigl[
+\delta - \operatorname{mean}(\delta) - \hat{x}\, \operatorname{mean}(\delta \odot \hat{x})
+\Bigr].
+$$
+
+这个公式说明 LayerNorm 并不只是“把方差归一化”这么简单，它会在 token 内部产生坐标耦合：
+
+1. 梯度的均值方向会被去掉，
+2. 与归一化输入 $\hat{x}$ 对齐的分量也会被去掉。
+
+参数梯度则为
+
+$$
+G_\beta = \sum g, \qquad G_\gamma = \sum (g \odot \hat{x}),
+$$
+
+其中求和跨越 batch 和所有 token 位置。
+
+残差分支则更简单，但战略意义更大。若
+
+$$
+U = X + F(X),
+$$
+
+则
+
+$$
+G_X = G_U + G_{X \leftarrow F}.
+$$
+
+这条 identity transport route 是深层网络可训练性的根基。后面讨论 Pre-LN 和 Post-LN 的差异，本质上就是在问：这条路在跨层传播时究竟有多干净，还是被 normalization 扭曲了。
+
+## FFN Backward 与 Encoder Block 组合
+
+一个 FFN 子层可以写为
+
+$$
+H = XW_1 + b_1,
+$$
+
+$$
+Z = \phi(H),
+$$
+
+$$
+Y = ZW_2 + b_2.
+$$
+
+反向传播得到
+
+$$
+G_Z = G_Y W_2^\top, \qquad G_{W_2} = Z^\top G_Y, \qquad G_{b_2} = \sum G_Y,
+$$
+
+再穿过激活函数：
+
+$$
+G_H = G_Z \odot \phi'(H),
+$$
+
+最后回到第一层线性：
+
+$$
+G_X = G_H W_1^\top, \qquad G_{W_1} = X^\top G_H, \qquad G_{b_1} = \sum G_H.
+$$
+
+对于 Post-LN encoder block，
+
+$$
+U = X + \operatorname{MHA}(X),
+$$
+
+$$
+Y = \operatorname{LN}_1(U),
+$$
+
+$$
+P = Y + \operatorname{FFN}(Y),
+$$
+
+$$
+Z = \operatorname{LN}_2(P).
+$$
+
+因此 backward 会不断交替穿过：
+
+1. LayerNorm Jacobian，
+2. residual add，
+3. 非线性分支。
+
+而对于 Pre-LN block，
+
+$$
+U = X + \operatorname{MHA}(\operatorname{LN}_1(X)),
+$$
+
+$$
+Y = U + \operatorname{FFN}(\operatorname{LN}_2(U)).
+$$
+
+这里 residual 路径位于 LayerNorm 外侧，因此跨层梯度的几何形态完全不同。这也是为什么 Pre-LN 与 Post-LN 的优化行为不一样。
+
+## 复杂度与显存开销
+
+真正有用的拆分方式，是把**计算复杂度**和**激活显存**分开看。
+
+| 组件 | 前向计算量 | 训练时需保留的激活 | 实践含义 |
+| --- | --- | --- | --- |
+| Q/K/V projection | `O(nd^2)` | `O(nd)` | 对长上下文来说不算主要瓶颈 |
+| score matrix `QK^T` | `O(n^2 d)` | 若显式存储则为 `O(hn^2)` | 长上下文下显存主导项 |
+| probability matrix `A` | `O(hn^2)` | 若存储则为 `O(hn^2)` | backward 常见瓶颈 |
+| value mixing `AV` | `O(n^2 d)` | `O(nd)` 加 attention 统计量 | 算得多，但未必最吃显存 |
+| output projection | `O(nd^2)` | `O(nd)` | 标准线性层 backward |
+| FFN，宽度 `d_ff` | `O(nd d_{ff})` | `O(nd_{ff})` | 当 context 不太长时常常是 FLOPs 主导 |
+
+若 $d_{ff} \approx 4d$，那么在中等长度 context 下 FFN 往往是主要 FLOPs 来源；但随着 $n$ 增大，attention 的二次项会先主导显存，并决定 batch size 上限。
+
+这一区分很关键，因为不同优化手段对应不同瓶颈：
+
+- activation checkpointing 是通用的“算力换显存”，
+- FlashAttention 是专门针对 attention IO 和显存布局，
+- fused LayerNorm / linear kernel 则是进一步削减带宽开销。
+
+## FlashAttention Backward：保存什么，重算什么
+
+朴素 attention backward 通常需要保存 score matrix $S$ 或 probability matrix $A$，它们都是 $O(hn^2)$ 级别。FlashAttention 改掉了这份“存储合同”。
+
+前向阶段只保留紧凑的逐行统计量，通常是数值稳定 softmax 所需的行最大值与归一化项：
+
+$$
+m_i = \max_j S_{ij}, \qquad \ell_i = \sum_j e^{S_{ij} - m_i}.
+$$
+
+在 backward 里，再从保存下来的 $Q$ 和 $K$ tile 局部重算 score，恢复局部 softmax 概率，并立即把梯度累加到目标张量中，而不是显式构造完整 attention matrix。
+
+<figure>
+  <img src={flashFig.src} alt="FlashAttention backward 的存储与重计算流程" />
+  <figcaption>图 2. FlashAttention backward 只保留逐行统计量，然后按 tile 重算局部 score/probability 并累积梯度。</figcaption>
+</figure>
+
+具体逻辑可以概括为：
+
+1. 重算一个局部 tile 的 $S = QK^\top / \sqrt{d_k}$，
+2. 利用保存的 $(m_i, \ell_i)$ 恢复该 tile 的 softmax 概率，
+3. 形成局部 $G_A$ 与局部 $G_S$，
+4. 再把结果累加到 $G_Q$、$G_K$、$G_V$。
+
+这里的重点不是 backward 的算术量一定更少。很多情况下，它其实会**更多**，因为你在重算局部 score。FlashAttention 真正赢的地方是：现代 GPU 训练常常更受限于高带宽显存流量和激活存储，而不是单纯的乘加次数。
+
+因此可以把它总结成：
+
+- 朴素 attention backward：少重算，但激活显存大；
+- FlashAttention backward：多重算，但激活显存和 IO 压力小得多。
+
+长上下文训练要的正是这种交换。
+
+## Pre-LN vs Post-LN：为什么 Pre-LN 更容易训练
+
+比较这两种结构，最干净的方法是直接对 block map 求导。
+
+对于 Pre-LN，
+
+$$
+x_{\ell+1} = x_\ell + F_\ell(\operatorname{LN}(x_\ell)).
+$$
+
+因此
+
+$$
+\frac{\partial x_{\ell+1}}{\partial x_\ell}
+=
+I + J_{F_\ell} J_{\operatorname{LN}}.
+$$
+
+这里有一个显式的 identity term。跨很多层时，即使分支 Jacobian 条件不够理想，梯度仍然可以沿着加法 shortcut 传播。
+
+对于 Post-LN，
+
+$$
+x_{\ell+1} = \operatorname{LN}(x_\ell + F_\ell(x_\ell)).
+$$
+
+则
+
+$$
+\frac{\partial x_{\ell+1}}{\partial x_\ell}
+=
+J_{\operatorname{LN}} \bigl(I + J_{F_\ell}\bigr).
+$$
+
+此时就连 residual route 本身也要先经过 LayerNorm Jacobian，“干净的 identity highway” 消失了。
+
+<figure>
+  <img src={stabilityFig.src} alt="Pre-LN 与 Post-LN 的梯度传输比较" />
+  <figcaption>图 3. Pre-LN 保留直接的加法路径；Post-LN 会在残差路径上重复乘上 normalization Jacobian。</figcaption>
+</figure>
+
+这立刻解释了为什么 Pre-LN 通常更容易训练：
+
+1. residual stream 保留了未扭曲的跨层传输路径，
+2. 梯度传输对 LayerNorm 局部条件数不那么敏感，
+3. 初始化与 warm-up 的脆弱性更低。
+
+要注意，“更容易训练”并不等于“每一条分支梯度都很大”。更准确的说法是：Pre-LN 至少保留了一条足够稳定的主路径。Xiong 等人的分析从 mean-field 视角说明了为什么 Post-LN 在初始化附近更难优化。
+
+## 深层 Transformer 中的梯度衰减路径
+
+Transformer 里的梯度消失，通常不是一种单点灾难，而是**路径相关的衰减**。有些路径仍然健康，有些路径则先塌缩了。
+
+主要衰减机制有以下几类。
+
+### 1. Softmax 饱和
+
+当某一行 attention logit 过度主导时，softmax Jacobian
+
+$$
+\operatorname{diag}(a) - aa^\top
+$$
+
+在大部分方向上会接近奇异。直观上看，分布已经太尖锐，logit 的变化很难再有效改变概率。
+
+### 2. LayerNorm 的投影效应
+
+LayerNorm 会移除梯度的均值方向，以及与归一化输入对齐的方向。这不会把所有梯度都消掉，但会过滤掉一部分方向。多层重复后，有效可传输的子空间会发生变化。
+
+### 3. FFN 激活门控
+
+对 ReLU 而言，负半轴直接关门；对 GELU 而言，虽然平滑，但在较大的负区间仍然会明显抑制梯度。因此 FFN backward 并不只是矩阵乘法，它还带有一个 mask 或 soft gate。
+
+### 4. Post-LN 的残差扭曲
+
+在 Post-LN 中，就连残差路径本身也会被 normalization 过滤。深层连乘后，某些有效分量会持续缩小。
+
+### 5. 长链路复合效应
+
+深层 Transformer 会把上面这些因素叠乘在一起。即使每一项都只是“中等收缩”，连乘之后也会在某些 mode 上形成很弱的梯度传输。
+
+因此更准确的结论不是“Transformer 像老 RNN 一样整体梯度消失”，而是：**在 attention 行方向、normalization 敏感方向，以及深层辅助分支上，路径级别和模态级别的梯度衰减依然非常重要。**
+
+## 为什么 RL 训练 LLM 更不稳定
+
+当 LLM 用 policy-gradient 风格目标训练时，Transformer 的 backward 图并没有变，变化的是上游信号的统计性质。
+
+在 token 级别，一个 policy objective 可以写成
+
+$$
+L_{\mathrm{RL}} = -\sum_t A_t \log \pi_\theta(a_t \mid s_t),
+$$
+
+或者在 PPO 中写成其 clipped 变体。对于未裁剪版本，logit 梯度可写成
+
+$$
+\frac{\partial L}{\partial z_t} \propto -A_t \bigl(e_{a_t} - p_t\bigr),
+$$
+
+其中 $z_t$ 是 logits，$p_t = \operatorname{softmax}(z_t)$。
+
+从这里开始，后面的所有传播都只是普通 Transformer backward：
+
+- logits 回到 hidden states，
+- hidden states 穿过输出 projection，
+- hidden states 再穿过 residual stack，
+- 再经过 LayerNorm、attention 与 FFN。
+
+那么为什么 RL 微调通常比监督式 next-token training 更不稳定？
+
+1. **Advantage scaling 会放大整条 backward 链。** 奖励或 advantage 若没归一好，梯度尺度会立刻失控。
+2. **Softmax 几何会更尖锐。** KL 惩罚、temperature 调整、高置信策略都会让分布更接近饱和，条件数更差。
+3. **LayerNorm 会在 token 内部耦合坐标。** 一个 token 上的 noisy policy signal，不会作为独立标量扰动传播，而会先经过归一化耦合。
+4. **Credit assignment 稀疏且延迟。** 奖励可能在很后面才出现，但 blame 需要回到更早的 token 计算上。
+5. **长序列会累积方差。** 即使单 token 梯度无偏，序列层面的方差仍然很大。
+
+所以“RLHF 本质上就是 Transformer backward + policy gradient”这个说法是对的，但还不够。公式仍然熟悉，但上游梯度的分布已经变得更 noisy、更 anisotropic。
+
+## PyTorch 实现映射
+
+这些数学关系和 PyTorch 张量实现几乎是一一对应的。
+
+```python
+import math
+import torch
+import torch.nn.functional as F
+
+# Q, K, V projections
+q = x @ w_q
+k = x @ w_k
+v = x @ w_v
+
+# attention core
+scores = q @ k.transpose(-2, -1) / math.sqrt(d_k)
+attn = torch.softmax(scores, dim=-1)
+out = attn @ v
+
+# output projection
+h = out.reshape(batch, seq, d)
+y = h @ w_o
+
+# FFN
+h1 = x @ w1 + b1
+z = F.gelu(h1)
+y_ffn = z @ w2 + b2
+```
+
+对应的 backward 关系也非常直接：
+
+| 数学表达 | PyTorch 层面的理解 |
+| --- | --- |
+| `G_X = G_Y W^T` | `dX = dY @ W.T` |
+| `G_W = X^T G_Y` | `dW = X.T @ dY` |
+| `G_Q = G_S K / sqrt(d_k)` | `dQ = dS @ K / math.sqrt(d_k)` |
+| `G_K = G_S^T Q / sqrt(d_k)` | `dK = dS.transpose(-2, -1) @ Q / math.sqrt(d_k)` |
+| `G_S = A ⊙ (G_A - rowdot(A, G_A))` | `dS = A * (dA - (dA * A).sum(-1, keepdim=True))` |
+| LayerNorm backward | fused kernel 本质上实现的是同一个“归一化投影”公式 |
+
+在调试自定义 kernel 时，最稳妥的方法仍然是：先降到很小的 tensor，对照 `torch.autograd`，把每一个局部表达式都核实后再拼回整个 block。
+
+## 一页工业速查表
+
+<div class="cheat-grid">
+  <div class="cheat-card">
+    <h3>Matrix rule</h3>
+    <p>若 <code>Y = XW</code>：</p>
+    $$
+    G_X = G_Y W^\top, \qquad G_W = X^\top G_Y.
+    $$
+  </div>
+  <div class="cheat-card">
+    <h3>Softmax backward</h3>
+    $$
+    g_s = a \odot \bigl(g_a - (a^\top g_a)\mathbf{1}\bigr).
+    $$
+    <p>attention 中按行应用即可。</p>
+  </div>
+  <div class="cheat-card">
+    <h3>Attention score backward</h3>
+    $$
+    G_Q = \frac{G_S K}{\sqrt{d_k}}, \qquad G_K = \frac{G_S^\top Q}{\sqrt{d_k}}.
+    $$
+  </div>
+  <div class="cheat-card">
+    <h3>LayerNorm backward</h3>
+    $$
+    G_x = \frac{1}{\sigma}\Bigl[\delta - \operatorname{mean}(\delta) - \hat{x}\operatorname{mean}(\delta \odot \hat{x})\Bigr].
+    $$
+  </div>
+  <div class="cheat-card">
+    <h3>FFN backward</h3>
+    $$
+    G_Z = G_Y W_2^\top, \qquad G_H = G_Z \odot \phi'(H), \qquad G_X = G_H W_1^\top.
+    $$
+  </div>
+  <div class="cheat-card">
+    <h3>Residual merge</h3>
+    <p>若 <code>U = X + F(X)</code>：</p>
+    $$
+    G_X = G_U + G_{X \leftarrow F}.
+    $$
+    <p>不要漏掉这条直接路径。</p>
+  </div>
+</div>
+
+## 工程实现注意事项
+
+1. **softmax 一定做数值稳定处理。** 指数之前必须减去行最大值。
+2. **LayerNorm epsilon 必须显式保留。** 类似 `1e-5` 的项不是装饰，而是 backward 条件数的一部分。
+3. **保留 `1 / sqrt(d_k)` 缩放。** 忽略它会同时改变前向分布尖锐度和反向梯度量级。
+4. **Q/K/V 三路输入梯度必须正确求和。** 因为它们共享输入张量。
+5. **混合精度要谨慎。** softmax reduction、LayerNorm 统计量、部分累加器最好仍保留 FP32。
+6. **带宽受限时优先考虑 fused kernel。** 数学不变，变的是 memory schedule。
+7. **先在极小 tensor 上验证 kernel。** 很多转置、broadcast、符号错误都能在这个阶段暴露出来。
+8. **调试时按“传输路径”思考。** 问题究竟出在 softmax、normalization、activation gate、residual，还是 loss scale 本身。
+
+## 参考文献
+
+1. Vaswani et al. (2017), [Attention Is All You Need](https://arxiv.org/abs/1706.03762).
+2. Ba, Kiros, and Hinton (2016), [Layer Normalization](https://arxiv.org/abs/1607.06450).
+3. Xiong et al. (2020), [On Layer Normalization in the Transformer Architecture](https://proceedings.mlr.press/v119/xiong20b.html).
+4. Dao et al. (2022), [FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness](https://arxiv.org/abs/2205.14135).
+5. Dao (2023), [FlashAttention-2: Faster Attention with Better Parallelism and Work Partitioning](https://arxiv.org/abs/2307.08691).
+6. Schulman et al. (2017), [Proximal Policy Optimization Algorithms](https://arxiv.org/abs/1707.06347).
+7. Ouyang et al. (2022), [Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155).

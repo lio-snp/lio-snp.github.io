@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="680" viewBox="0 0 1200 680" fill="none">
+  <rect width="1200" height="680" rx="32" fill="#F7F3EA"/>
+  <rect x="42" y="42" width="1116" height="596" rx="28" fill="#FCFAF5" stroke="#D3CFC4" stroke-width="2"/>
+  <text x="72" y="100" fill="#0D1B2A" font-family="Arial, Helvetica, sans-serif" font-size="38" font-weight="700">Transformer Forward and Backward Graph</text>
+  <text x="72" y="136" fill="#64748B" font-family="Arial, Helvetica, sans-serif" font-size="20">Forward activations in teal. Backward transport paths in amber.</text>
+
+  <rect x="82" y="188" width="148" height="74" rx="18" fill="#E7F4F8" stroke="#0E7490" stroke-width="2"/>
+  <text x="156" y="232" text-anchor="middle" fill="#0D1B2A" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700">X</text>
+
+  <rect x="292" y="166" width="130" height="62" rx="16" fill="#E7F4F8" stroke="#0E7490" stroke-width="2"/>
+  <text x="357" y="204" text-anchor="middle" fill="#0D1B2A" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700">Q = XW_Q</text>
+
+  <rect x="292" y="241" width="130" height="62" rx="16" fill="#E7F4F8" stroke="#0E7490" stroke-width="2"/>
+  <text x="357" y="279" text-anchor="middle" fill="#0D1B2A" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700">K = XW_K</text>
+
+  <rect x="292" y="316" width="130" height="62" rx="16" fill="#E7F4F8" stroke="#0E7490" stroke-width="2"/>
+  <text x="357" y="354" text-anchor="middle" fill="#0D1B2A" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700">V = XW_V</text>
+
+  <rect x="494" y="202" width="174" height="72" rx="18" fill="#E7F4F8" stroke="#0E7490" stroke-width="2"/>
+  <text x="581" y="237" text-anchor="middle" fill="#0D1B2A" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700">S = QK^T / sqrt(d_k)</text>
+  <text x="581" y="263" text-anchor="middle" fill="#64748B" font-family="Arial, Helvetica, sans-serif" font-size="18">score matrix</text>
+
+  <rect x="736" y="202" width="132" height="72" rx="18" fill="#E7F4F8" stroke="#0E7490" stroke-width="2"/>
+  <text x="802" y="238" text-anchor="middle" fill="#0D1B2A" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700">A = softmax(S)</text>
+
+  <rect x="930" y="202" width="160" height="72" rx="18" fill="#E7F4F8" stroke="#0E7490" stroke-width="2"/>
+  <text x="1010" y="238" text-anchor="middle" fill="#0D1B2A" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700">O = AV</text>
+
+  <rect x="930" y="340" width="160" height="72" rx="18" fill="#E7F4F8" stroke="#0E7490" stroke-width="2"/>
+  <text x="1010" y="375" text-anchor="middle" fill="#0D1B2A" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700">H = concat(heads)</text>
+
+  <rect x="736" y="478" width="132" height="72" rx="18" fill="#E7F4F8" stroke="#0E7490" stroke-width="2"/>
+  <text x="802" y="514" text-anchor="middle" fill="#0D1B2A" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700">Y = HW_O</text>
+
+  <rect x="494" y="478" width="174" height="72" rx="18" fill="#E7F4F8" stroke="#0E7490" stroke-width="2"/>
+  <text x="581" y="514" text-anchor="middle" fill="#0D1B2A" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700">Residual + LayerNorm</text>
+
+  <rect x="292" y="478" width="130" height="72" rx="18" fill="#E7F4F8" stroke="#0E7490" stroke-width="2"/>
+  <text x="357" y="514" text-anchor="middle" fill="#0D1B2A" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700">FFN</text>
+
+  <defs>
+    <marker id="arrow-teal" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#0E7490"/>
+    </marker>
+    <marker id="arrow-amber" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#B45309"/>
+    </marker>
+  </defs>
+
+  <line x1="230" y1="225" x2="292" y2="197" stroke="#0E7490" stroke-width="3" marker-end="url(#arrow-teal)"/>
+  <line x1="230" y1="225" x2="292" y2="272" stroke="#0E7490" stroke-width="3" marker-end="url(#arrow-teal)"/>
+  <line x1="230" y1="225" x2="292" y2="347" stroke="#0E7490" stroke-width="3" marker-end="url(#arrow-teal)"/>
+  <line x1="422" y1="197" x2="494" y2="224" stroke="#0E7490" stroke-width="3" marker-end="url(#arrow-teal)"/>
+  <line x1="422" y1="272" x2="494" y2="252" stroke="#0E7490" stroke-width="3" marker-end="url(#arrow-teal)"/>
+  <line x1="668" y1="238" x2="736" y2="238" stroke="#0E7490" stroke-width="3" marker-end="url(#arrow-teal)"/>
+  <line x1="422" y1="347" x2="930" y2="238" stroke="#0E7490" stroke-width="3" marker-end="url(#arrow-teal)"/>
+  <line x1="868" y1="238" x2="930" y2="238" stroke="#0E7490" stroke-width="3" marker-end="url(#arrow-teal)"/>
+  <line x1="1010" y1="274" x2="1010" y2="340" stroke="#0E7490" stroke-width="3" marker-end="url(#arrow-teal)"/>
+  <line x1="930" y1="376" x2="868" y2="505" stroke="#0E7490" stroke-width="3" marker-end="url(#arrow-teal)"/>
+  <line x1="736" y1="514" x2="668" y2="514" stroke="#0E7490" stroke-width="3" marker-end="url(#arrow-teal)"/>
+  <line x1="494" y1="514" x2="422" y2="514" stroke="#0E7490" stroke-width="3" marker-end="url(#arrow-teal)"/>
+
+  <path d="M736 570 C700 612, 534 624, 422 550" stroke="#B45309" stroke-width="3.5" fill="none" stroke-dasharray="10 8" marker-end="url(#arrow-amber)"/>
+  <path d="M930 420 C874 470, 744 470, 668 420" stroke="#B45309" stroke-width="3.5" fill="none" stroke-dasharray="10 8" marker-end="url(#arrow-amber)"/>
+  <path d="M930 190 C854 132, 650 136, 422 244" stroke="#B45309" stroke-width="3.5" fill="none" stroke-dasharray="10 8" marker-end="url(#arrow-amber)"/>
+  <path d="M736 190 C650 128, 512 126, 422 169" stroke="#B45309" stroke-width="3.5" fill="none" stroke-dasharray="10 8" marker-end="url(#arrow-amber)"/>
+  <path d="M930 190 C830 130, 610 120, 422 320" stroke="#B45309" stroke-width="3.5" fill="none" stroke-dasharray="10 8" marker-end="url(#arrow-amber)"/>
+
+  <text x="83" y="610" fill="#64748B" font-family="Arial, Helvetica, sans-serif" font-size="18">Backward recap: dY -> dH -> dO -> (dA, dV) -> dS -> (dQ, dK) -> dX and parameter gradients.</text>
+</svg>

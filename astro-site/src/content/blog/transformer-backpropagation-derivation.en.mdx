@@ -1,0 +1,627 @@
+---
+title: "Transformer Backpropagation Derivation: Unified Formulation, Stability, and RL Connections"
+summary: "A research-grade derivation that unifies attention, LayerNorm, residual transport, FlashAttention backward, and RL/LLM stability into one computational story."
+date: 2026-03-13
+canonicalSlug: "transformer-backpropagation-derivation"
+tags:
+  - llm cheating sheet
+locale: en
+cover: "transformer-backprop-overview"
+---
+
+import overviewFig from '@/assets/blog/transformer-backpropagation/transformer-backprop-overview.svg';
+import flashFig from '@/assets/blog/transformer-backpropagation/flashattention-backward.svg';
+import stabilityFig from '@/assets/blog/transformer-backpropagation/preln-postln-stability.svg';
+
+## Why This Derivation Exists
+
+Most notes on Transformer backward pass are locally correct but globally fragmented: one note derives softmax, another writes the LayerNorm formula, and a third discusses why Pre-LN trains more easily. What is often missing is the **single computational story** that connects all of them.
+
+This article is written for the case where you already know the forward pass, but you want a backward view that is good enough for:
+
+1. paper writing,
+2. systems implementation,
+3. debugging training instability,
+4. and understanding why RL-style training on top of LLMs becomes fragile.
+
+<div class="research-note">
+  <strong>Main claim.</strong> Transformer training is not hard because any one derivative is exotic. It is hard because the full gradient must pass through a chain of matrix products, softmax geometry, normalization couplings, residual routing, and sometimes policy-gradient scaling. The right mental model is therefore not “many formulas,” but “one graph with several bottlenecks.”
+</div>
+
+## Unified Notation and Full Computational Graph
+
+Let
+
+$$
+n = \text{sequence length}, \quad d = \text{model dimension}, \quad h = \text{number of heads}, \quad d_k = d_v = \frac{d}{h}.
+$$
+
+Input hidden states are
+
+$$
+X \in \mathbb{R}^{n \times d}.
+$$
+
+For a multi-head attention block, define
+
+$$
+Q = XW_Q, \qquad K = XW_K, \qquad V = XW_V,
+$$
+
+with
+
+$$
+W_Q, W_K, W_V, W_O \in \mathbb{R}^{d \times d}.
+$$
+
+For one head,
+
+$$
+S = \frac{QK^\top}{\sqrt{d_k}}, \qquad A = \operatorname{softmax}(S), \qquad O = AV.
+$$
+
+Across all heads,
+
+$$
+H = \operatorname{concat}(O^{(1)}, \dots, O^{(h)}), \qquad Y = HW_O.
+$$
+
+A standard encoder block then couples attention, residual connections, LayerNorm, and FFN. The central point is that backward propagation follows the same graph in reverse, with additive merges at residual branches and row-wise geometry at softmax.
+
+<figure>
+  <img src={overviewFig.src} alt="Overview of Transformer forward and backward computational graph" />
+  <figcaption>Figure 1. A compact graph view: forward activations move in teal, while backward transport moves in amber.</figcaption>
+</figure>
+
+Throughout the note, let the upstream gradient of a variable $Z$ be
+
+$$
+G_Z = \frac{\partial L}{\partial Z}.
+$$
+
+This notation keeps the derivation readable when many branches merge.
+
+## Matrix Backpropagation Rules
+
+The basic rule underneath nearly the entire Transformer backward pass is the matrix linear map
+
+$$
+Y = XW.
+$$
+
+Then
+
+$$
+G_X = G_Y W^\top, \qquad G_W = X^\top G_Y.
+$$
+
+If bias is present,
+
+$$
+Y = XW + b,
+$$
+
+then
+
+$$
+G_b = \sum_{i=1}^{n} G_{Y, i:}.
+$$
+
+Two observations matter in practice.
+
+First, every projection in attention and FFN is just this rule again. There is no new math there.
+
+Second, bilinear forms are the real branching point. For
+
+$$
+S = \frac{QK^\top}{\sqrt{d_k}},
+$$
+
+we have
+
+$$
+G_Q = \frac{G_S K}{\sqrt{d_k}}, \qquad G_K = \frac{G_S^\top Q}{\sqrt{d_k}}.
+$$
+
+So once $G_S$ is known, score backward is again a matrix multiplication problem.
+
+## Attention Backward: Single Head to Multi-Head
+
+Start from the output of one head:
+
+$$
+O = AV.
+$$
+
+Backward through this product gives
+
+$$
+G_A = G_O V^\top, \qquad G_V = A^\top G_O.
+$$
+
+The nontrivial step is the row-wise softmax. For one row $a = \operatorname{softmax}(s)$, the Jacobian is
+
+$$
+J_{\text{softmax}}(s) = \operatorname{diag}(a) - aa^\top.
+$$
+
+If $g = \frac{\partial L}{\partial a}$, then
+
+$$
+\frac{\partial L}{\partial s} = J_{\text{softmax}}(s) g = a \odot \Bigl(g - (a^\top g)\mathbf{1}\Bigr).
+$$
+
+This is the implementation form used in efficient kernels. Applied row-wise to the full matrix,
+
+$$
+G_S[i, :] = A[i, :] \odot \Bigl(G_A[i, :] - \langle A[i, :], G_A[i, :] \rangle \mathbf{1}\Bigr).
+$$
+
+Then the score backward is
+
+$$
+G_Q = \frac{G_S K}{\sqrt{d_k}}, \qquad G_K = \frac{G_S^\top Q}{\sqrt{d_k}}.
+$$
+
+Finally, because
+
+$$
+Q = XW_Q, \qquad K = XW_K, \qquad V = XW_V,
+$$
+
+we obtain
+
+$$
+G_X^{(Q)} = G_Q W_Q^\top, \qquad G_{W_Q} = X^\top G_Q,
+$$
+
+$$
+G_X^{(K)} = G_K W_K^\top, \qquad G_{W_K} = X^\top G_K,
+$$
+
+$$
+G_X^{(V)} = G_V W_V^\top, \qquad G_{W_V} = X^\top G_V.
+$$
+
+Therefore the input gradient of a single head is
+
+$$
+G_X = G_X^{(Q)} + G_X^{(K)} + G_X^{(V)}.
+$$
+
+For multi-head attention, the output projection is
+
+$$
+Y = HW_O.
+$$
+
+So
+
+$$
+G_H = G_Y W_O^\top, \qquad G_{W_O} = H^\top G_Y.
+$$
+
+After splitting $G_H$ back into head-wise blocks, each head is independent until the final sum into the shared input $X$.
+
+The key systems implication is that attention backward has two different memory personalities:
+
+1. projection gradients are linear in $n$,
+2. but score/probability tensors are quadratic in $n$.
+
+That asymmetry is why long-context training becomes memory-bound even before compute becomes the main problem.
+
+## LayerNorm Backward and Residual Paths
+
+For one token vector $x \in \mathbb{R}^{d}$, LayerNorm computes
+
+$$
+\mu = \frac{1}{d}\sum_{j=1}^{d} x_j,
+$$
+
+$$
+\sigma^2 = \frac{1}{d}\sum_{j=1}^{d}(x_j - \mu)^2,
+$$
+
+$$
+\hat{x} = \frac{x - \mu}{\sqrt{\sigma^2 + \varepsilon}},
+$$
+
+and output
+
+$$
+y = \gamma \odot \hat{x} + \beta.
+$$
+
+Let upstream gradient be $g = \frac{\partial L}{\partial y}$. Define
+
+$$
+\delta = g \odot \gamma.
+$$
+
+Then the input gradient can be written compactly as
+
+$$
+\frac{\partial L}{\partial x}
+=
+\frac{1}{\sqrt{\sigma^2 + \varepsilon}}
+\Bigl[
+\delta - \operatorname{mean}(\delta) - \hat{x}\, \operatorname{mean}(\delta \odot \hat{x})
+\Bigr].
+$$
+
+This formula explains why LayerNorm is more than just a scale normalization step. It **couples coordinates inside each token** through two subtractions:
+
+1. the mean-gradient component is removed,
+2. and the component aligned with $\hat{x}$ is also removed.
+
+At the parameter level,
+
+$$
+G_\beta = \sum g, \qquad G_\gamma = \sum (g \odot \hat{x}),
+$$
+
+where the sum is over tokens and batch positions.
+
+Residual branches are simpler but strategically important. If
+
+$$
+U = X + F(X),
+$$
+
+then
+
+$$
+G_X = G_U + G_{X \leftarrow F}.
+$$
+
+This is the identity transport route that makes deep networks trainable at all. The rest of the note repeatedly comes back to the question: when does this route remain clean, and when is it distorted by normalization or saturation?
+
+## FFN Backward and Encoder Block Composition
+
+A feed-forward sublayer can be written as
+
+$$
+H = XW_1 + b_1,
+$$
+
+$$
+Z = \phi(H),
+$$
+
+$$
+Y = ZW_2 + b_2.
+$$
+
+Backward gives
+
+$$
+G_Z = G_Y W_2^\top, \qquad G_{W_2} = Z^\top G_Y, \qquad G_{b_2} = \sum G_Y,
+$$
+
+then through the activation,
+
+$$
+G_H = G_Z \odot \phi'(H),
+$$
+
+and finally
+
+$$
+G_X = G_H W_1^\top, \qquad G_{W_1} = X^\top G_H, \qquad G_{b_1} = \sum G_H.
+$$
+
+For a Post-LN encoder block,
+
+$$
+U = X + \operatorname{MHA}(X),
+$$
+
+$$
+Y = \operatorname{LN}_1(U),
+$$
+
+$$
+P = Y + \operatorname{FFN}(Y),
+$$
+
+$$
+Z = \operatorname{LN}_2(P).
+$$
+
+Backward therefore alternates between
+
+1. a LayerNorm Jacobian,
+2. a residual add,
+3. and a nonlinear branch.
+
+For a Pre-LN block,
+
+$$
+U = X + \operatorname{MHA}(\operatorname{LN}_1(X)),
+$$
+
+$$
+Y = U + \operatorname{FFN}(\operatorname{LN}_2(U)).
+$$
+
+Now the residual route is outside LayerNorm, which changes the geometry of gradient transport across depth. This difference is the whole reason Pre-LN and Post-LN behave differently during optimization.
+
+## Complexity and Memory Cost
+
+The useful split is between **compute complexity** and **activation memory**.
+
+| Component | Forward compute | Training activations to keep | Practical comment |
+| --- | --- | --- | --- |
+| Q/K/V projections | `O(nd^2)` | `O(nd)` | Cheap relative to attention matrix for long context |
+| Score matrix `QK^T` | `O(n^2 d)` | `O(hn^2)` if materialized | Dominates long-context memory |
+| Probability matrix `A` | `O(hn^2)` | `O(hn^2)` if stored | Often the main backward bottleneck |
+| Value mixing `AV` | `O(n^2 d)` | `O(nd)` plus attention stats | Compute heavy but not the main memory term |
+| Output projection | `O(nd^2)` | `O(nd)` | Standard linear backward |
+| FFN with width `d_ff` | `O(nd d_{ff})` | `O(nd_{ff})` | Often compute-dominant when context is short |
+
+If $d_{ff} \approx 4d$, FFN can dominate FLOPs at moderate context length. But once $n$ grows, the quadratic attention tensors dominate memory and usually decide batch size.
+
+This distinction matters because optimization strategies differ:
+
+- activation checkpointing trades compute for memory broadly,
+- FlashAttention specifically attacks attention IO and memory,
+- fused LayerNorm/linear kernels target bandwidth overhead in smaller pieces.
+
+## FlashAttention Backward: What Is Saved, What Is Recomputed
+
+Naive attention backward stores either the score matrix $S$ or the probability matrix $A$, both of which scale like $O(hn^2)$. FlashAttention changes this contract.
+
+The forward pass keeps only compact row statistics, typically the running max and normalization terms used by numerically stable softmax:
+
+$$
+m_i = \max_j S_{ij}, \qquad \ell_i = \sum_j e^{S_{ij} - m_i}.
+$$
+
+During backward, it recomputes local score tiles from saved $Q$ and $K$ blocks, reconstructs local probabilities, and immediately accumulates gradient contributions without ever materializing the full matrix.
+
+<figure>
+  <img src={flashFig.src} alt="FlashAttention backward memory and recomputation flow" />
+  <figcaption>Figure 2. FlashAttention backward saves row statistics, then recomputes local tiles to recover probabilities and accumulate gradients.</figcaption>
+</figure>
+
+Concretely, the logic is:
+
+1. recompute a tile of $S = QK^\top / \sqrt{d_k}$,
+2. recover the local softmax values using saved $(m_i, \ell_i)$,
+3. form local $G_A$ and then local $G_S$,
+4. accumulate into $G_Q$, $G_K$, and $G_V$.
+
+The point is not that backward uses less arithmetic. It often uses **more** arithmetic because of recomputation. The gain is that GPU training is typically limited by memory traffic and activation storage, not by scalar multiply-add count alone. FlashAttention wins by reducing high-bandwidth-memory pressure.
+
+A good summary is:
+
+- naive attention backward: less recomputation, much larger activation memory,
+- FlashAttention backward: more recomputation, much lower activation memory and IO.
+
+That tradeoff is exactly what long-context training wants.
+
+## Pre-LN vs Post-LN: Why Pre-LN Trains More Easily
+
+The cleanest way to compare the two variants is to differentiate the block map itself.
+
+For Pre-LN,
+
+$$
+x_{\ell+1} = x_\ell + F_\ell(\operatorname{LN}(x_\ell)).
+$$
+
+Hence
+
+$$
+\frac{\partial x_{\ell+1}}{\partial x_\ell}
+=
+I + J_{F_\ell} J_{\operatorname{LN}}.
+$$
+
+There is a literal identity term. Across depth, gradients can always travel through the additive shortcut even if the branch Jacobian is imperfect.
+
+For Post-LN,
+
+$$
+x_{\ell+1} = \operatorname{LN}(x_\ell + F_\ell(x_\ell)).
+$$
+
+Then
+
+$$
+\frac{\partial x_{\ell+1}}{\partial x_\ell}
+=
+J_{\operatorname{LN}} \bigl(I + J_{F_\ell}\bigr).
+$$
+
+Now the residual route itself is multiplied by the LayerNorm Jacobian. The “clean identity highway” is gone.
+
+<figure>
+  <img src={stabilityFig.src} alt="Comparison of Pre-LN and Post-LN gradient transport" />
+  <figcaption>Figure 3. Pre-LN preserves a direct additive path across layers; Post-LN repeatedly filters even the residual route through normalization.</figcaption>
+</figure>
+
+This immediately explains the empirical rule that Pre-LN is easier to optimize:
+
+1. the residual stream keeps an undistorted additive route,
+2. gradient transport is less sensitive to the local conditioning of LayerNorm,
+3. warm-up and initialization become less fragile.
+
+The subtle point is that “easier to train” does not mean “every branch gradient is large.” It means the network preserves at least one robust path through depth. Xiong et al. analyze this from a mean-field perspective and show why Post-LN is more optimization-sensitive at initialization.
+
+## Gradient Vanishing Paths in Deep Transformers
+
+Gradient vanishing in Transformers is not usually a single catastrophic failure. It is **path-dependent attenuation**. Some routes remain healthy while others collapse.
+
+The main attenuation mechanisms are the following.
+
+### 1. Softmax concentration
+
+When one attention logit dominates a row, the softmax Jacobian
+
+$$
+\operatorname{diag}(a) - aa^\top
+$$
+
+becomes nearly singular in most directions. Intuitively, probabilities have already saturated, so changing logits barely changes the row distribution.
+
+### 2. LayerNorm projection effects
+
+LayerNorm removes the mean component of the gradient and the component aligned with the normalized input. This does not kill all gradients, but it filters gradient directions. Repeating this over many layers changes the effective transport subspace.
+
+### 3. Activation gating in FFN
+
+For ReLU, negative pre-activations shut the branch off completely. For GELU, the gate is smoother but still suppresses large negative regions. So FFN backward is not only a matrix rule; it is also a mask or soft gate.
+
+### 4. Post-LN residual distortion
+
+In Post-LN, even the residual branch is filtered by normalization. Deep products of such Jacobians can shrink usable gradient components.
+
+### 5. Long-horizon composition
+
+A deep Transformer composes all of the above. Even if no single factor is catastrophic, the product of many moderately contractive Jacobians creates weak transport on specific modes.
+
+The right conclusion is not “Transformers suffer global vanishing like old RNNs.” A better statement is: **branch-specific and mode-specific gradient attenuation still matters, especially in attention rows, normalization-sensitive directions, and deep auxiliary paths.**
+
+## Why RL Training LLMs Becomes Unstable
+
+Once an LLM is trained with policy-gradient style objectives, the Transformer backward graph stays the same, but the upstream signal changes.
+
+At token level, a policy objective can be written as
+
+$$
+L_{\mathrm{RL}} = -\sum_t A_t \log \pi_\theta(a_t \mid s_t),
+$$
+
+or, in PPO-style implementations, a clipped variant of the same idea. The logit gradient is then scaled by advantage-like terms. For an unclipped token objective,
+
+$$
+\frac{\partial L}{\partial z_t} \propto -A_t \bigl(e_{a_t} - p_t\bigr),
+$$
+
+where $z_t$ are logits and $p_t = \operatorname{softmax}(z_t)$.
+
+From there, everything is ordinary Transformer backward again:
+
+- logits to hidden states,
+- hidden states through output projection,
+- hidden states through residual stacks,
+- hidden states through LayerNorm, attention, and FFN.
+
+So why does RL fine-tuning often feel much less stable than supervised next-token training?
+
+1. **Advantage scaling multiplies the whole backward chain.** Badly normalized rewards or advantages immediately become badly scaled gradients.
+2. **Softmax geometry becomes sharper.** KL penalties, temperature changes, or high-confidence policies can push rows closer to saturation, which worsens conditioning.
+3. **LayerNorm couples coordinates inside each token.** A noisy policy signal at one token affects the normalized representation in a coupled way, rather than as an independent scalar perturbation.
+4. **Credit assignment is delayed and sparse.** The reward may arrive much later than the token-level computation that must absorb the blame.
+5. **Long sequence accumulation increases variance.** Even when per-token gradients are unbiased, the sequence-level variance is large.
+
+This is why the engineering summary “RLHF is just Transformer backward plus policy gradient” is correct and still insufficient. The formulas are familiar, but the upstream distribution of gradients is much noisier and more anisotropic.
+
+## PyTorch Mapping
+
+The math maps almost one-to-one to PyTorch tensor code.
+
+```python
+import math
+import torch
+import torch.nn.functional as F
+
+# Q, K, V projections
+q = x @ w_q
+k = x @ w_k
+v = x @ w_v
+
+# attention core
+scores = q @ k.transpose(-2, -1) / math.sqrt(d_k)
+attn = torch.softmax(scores, dim=-1)
+out = attn @ v
+
+# output projection
+h = out.reshape(batch, seq, d)
+y = h @ w_o
+
+# FFN
+h1 = x @ w1 + b1
+z = F.gelu(h1)
+y_ffn = z @ w2 + b2
+```
+
+The backward correspondences are equally direct:
+
+| Math | PyTorch-level interpretation |
+| --- | --- |
+| `G_X = G_Y W^T` | `dX = dY @ W.T` |
+| `G_W = X^T G_Y` | `dW = X.T @ dY` |
+| `G_Q = G_S K / sqrt(d_k)` | `dQ = dS @ K / math.sqrt(d_k)` |
+| `G_K = G_S^T Q / sqrt(d_k)` | `dK = dS.transpose(-2, -1) @ Q / math.sqrt(d_k)` |
+| `G_S = A ⊙ (G_A - rowdot(A, G_A))` | `dS = A * (dA - (dA * A).sum(-1, keepdim=True))` |
+| LayerNorm backward | fused kernel implements the same normalized-projection formula |
+
+When debugging custom kernels, the most reliable strategy is still: reduce to tiny tensors, compare against `torch.autograd`, and check each sub-expression before composing the whole block.
+
+## One-Page Industrial Cheat Sheet
+
+<div class="cheat-grid">
+  <div class="cheat-card">
+    <h3>Matrix rule</h3>
+    <p>For <code>Y = XW</code>:</p>
+    $$
+    G_X = G_Y W^\top, \qquad G_W = X^\top G_Y.
+    $$
+  </div>
+  <div class="cheat-card">
+    <h3>Softmax backward</h3>
+    $$
+    g_s = a \odot \bigl(g_a - (a^\top g_a)\mathbf{1}\bigr).
+    $$
+    <p>Apply row-wise for attention probabilities.</p>
+  </div>
+  <div class="cheat-card">
+    <h3>Attention score backward</h3>
+    $$
+    G_Q = \frac{G_S K}{\sqrt{d_k}}, \qquad G_K = \frac{G_S^\top Q}{\sqrt{d_k}}.
+    $$
+  </div>
+  <div class="cheat-card">
+    <h3>LayerNorm backward</h3>
+    $$
+    G_x = \frac{1}{\sigma}\Bigl[\delta - \operatorname{mean}(\delta) - \hat{x}\operatorname{mean}(\delta \odot \hat{x})\Bigr].
+    $$
+  </div>
+  <div class="cheat-card">
+    <h3>FFN backward</h3>
+    $$
+    G_Z = G_Y W_2^\top, \qquad G_H = G_Z \odot \phi'(H), \qquad G_X = G_H W_1^\top.
+    $$
+  </div>
+  <div class="cheat-card">
+    <h3>Residual merge</h3>
+    <p>For <code>U = X + F(X)</code>:</p>
+    $$
+    G_X = G_U + G_{X \leftarrow F}.
+    $$
+    <p>Never forget the direct route.</p>
+  </div>
+</div>
+
+## Engineering Implementation Notes
+
+1. **Stabilize softmax.** Always subtract the row max before exponentiation.
+2. **Keep LayerNorm epsilon explicit.** Values such as `1e-5` are not decoration; they are part of the backward conditioning.
+3. **Preserve the `1 / sqrt(d_k)` scaling.** Omitting it changes both forward sharpness and backward magnitude.
+4. **Accumulate Q/K/V input gradients correctly.** Shared input means three projection branches must be summed.
+5. **Use mixed precision carefully.** Softmax reductions, LayerNorm statistics, and some accumulators should remain in FP32 even when activations are lower precision.
+6. **Prefer fused kernels when profiling shows bandwidth limits.** The math stays the same; the memory schedule changes.
+7. **Validate kernels on tiny tensors.** Numerical gradient checks on very small examples still catch most sign, transpose, and broadcast mistakes.
+8. **Think in terms of transport paths.** When debugging stability, ask which path is failing: softmax, normalization, activation gate, residual branch, or the upstream loss scale.
+
+## References
+
+1. Vaswani et al. (2017), [Attention Is All You Need](https://arxiv.org/abs/1706.03762).
+2. Ba, Kiros, and Hinton (2016), [Layer Normalization](https://arxiv.org/abs/1607.06450).
+3. Xiong et al. (2020), [On Layer Normalization in the Transformer Architecture](https://proceedings.mlr.press/v119/xiong20b.html).
+4. Dao et al. (2022), [FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness](https://arxiv.org/abs/2205.14135).
+5. Dao (2023), [FlashAttention-2: Faster Attention with Better Parallelism and Work Partitioning](https://arxiv.org/abs/2307.08691).
+6. Schulman et al. (2017), [Proximal Policy Optimization Algorithms](https://arxiv.org/abs/1707.06347).
+7. Ouyang et al. (2022), [Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155).

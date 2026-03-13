@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="640" viewBox="0 0 1200 640" fill="none">
+  <rect width="1200" height="640" rx="32" fill="#F7F3EA"/>
+  <rect x="40" y="40" width="1120" height="560" rx="28" fill="#FCFAF5" stroke="#D3CFC4" stroke-width="2"/>
+  <text x="74" y="98" fill="#0D1B2A" font-family="Arial, Helvetica, sans-serif" font-size="38" font-weight="700">FlashAttention Backward</text>
+  <text x="74" y="132" fill="#64748B" font-family="Arial, Helvetica, sans-serif" font-size="20">Store row statistics, recompute local scores tile by tile, and avoid materializing the full attention matrix.</text>
+
+  <rect x="86" y="194" width="248" height="112" rx="20" fill="#E7F4F8" stroke="#0E7490" stroke-width="2"/>
+  <text x="210" y="238" text-anchor="middle" fill="#0D1B2A" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700">Saved from forward</text>
+  <text x="210" y="272" text-anchor="middle" fill="#0D1B2A" font-family="Arial, Helvetica, sans-serif" font-size="20">Q, K, V tiles</text>
+  <text x="210" y="298" text-anchor="middle" fill="#0D1B2A" font-family="Arial, Helvetica, sans-serif" font-size="20">m_i, l_i, output fragments</text>
+
+  <rect x="476" y="168" width="248" height="164" rx="20" fill="#FFF5E8" stroke="#B45309" stroke-width="2"/>
+  <text x="600" y="212" text-anchor="middle" fill="#0D1B2A" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700">Backward tile step</text>
+  <text x="600" y="248" text-anchor="middle" fill="#0D1B2A" font-family="Arial, Helvetica, sans-serif" font-size="20">1. Recompute local S_ij</text>
+  <text x="600" y="276" text-anchor="middle" fill="#0D1B2A" font-family="Arial, Helvetica, sans-serif" font-size="20">2. Recover local P_ij</text>
+  <text x="600" y="304" text-anchor="middle" fill="#0D1B2A" font-family="Arial, Helvetica, sans-serif" font-size="20">3. Accumulate dQ, dK, dV</text>
+
+  <rect x="868" y="194" width="248" height="112" rx="20" fill="#E7F4F8" stroke="#0E7490" stroke-width="2"/>
+  <text x="992" y="238" text-anchor="middle" fill="#0D1B2A" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700">Memory outcome</text>
+  <text x="992" y="272" text-anchor="middle" fill="#0D1B2A" font-family="Arial, Helvetica, sans-serif" font-size="20">O(nd) statistics instead of</text>
+  <text x="992" y="298" text-anchor="middle" fill="#0D1B2A" font-family="Arial, Helvetica, sans-serif" font-size="20">O(h n^2) score/probability storage</text>
+
+  <rect x="168" y="404" width="866" height="118" rx="20" fill="#FCFAF5" stroke="#D3CFC4" stroke-width="2"/>
+  <text x="204" y="450" fill="#0D1B2A" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700">Tradeoff</text>
+  <text x="204" y="486" fill="#0D1B2A" font-family="Arial, Helvetica, sans-serif" font-size="20">Extra compute appears in backward because attention tiles are recomputed. The win comes from lower HBM traffic and much smaller activation memory, which is the regime that usually bottlenecks long-context training.</text>
+
+  <defs>
+    <marker id="arrow-teal" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#0E7490"/>
+    </marker>
+    <marker id="arrow-amber" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#B45309"/>
+    </marker>
+  </defs>
+
+  <line x1="334" y1="250" x2="476" y2="250" stroke="#0E7490" stroke-width="4" marker-end="url(#arrow-teal)"/>
+  <line x1="724" y1="250" x2="868" y2="250" stroke="#0E7490" stroke-width="4" marker-end="url(#arrow-teal)"/>
+  <path d="M600 332 C600 368, 600 388, 600 404" stroke="#B45309" stroke-width="4" stroke-dasharray="10 8" marker-end="url(#arrow-amber)"/>
+</svg>
