@@ -1,0 +1,40 @@
+/* An independent, cool-toned study of the journal layout. */
+:root { --bg:#f1f3f4; --paper:#f8f9fa; --ink:#262927; --muted:#606b74; --subtle:#727f88; --line:#d4dbdf; --accent:#385b95; --accent-soft:#eef2f7; --heading:var(--body); background:var(--bg); }
+.journal-header { padding-block:32px; }
+.wordmark { font-size:21px; font-weight:600; letter-spacing:-.9px; }
+.wordmark span { display:inline-block; width:6px; height:6px; margin-left:3px; color:transparent; background:#cbd478; border:1px solid #a4af55; vertical-align:baseline; }
+.journal-nav a { font-size:12px; }
+.intro-heading h1 { font-size:clamp(42px,4.6vw,66px); font-weight:500; letter-spacing:-3.7px; line-height:1.1; margin-bottom:32px; }
+.intro-heading h1 span { color:#8b9ba6; }
+.intro-affiliation { color:#647781; }
+.about-copy { line-height:1.9; }
+.about-copy strong { color:var(--ink); font-weight:700; }
+#about { padding-top:76px; }
+#news { padding-top:86px; }
+.section-title { font-size:23px; font-weight:500; letter-spacing:-.8px; }
+.featured-thumbnail,.featured-card>img { border-radius:2px; filter:saturate(.58); transition:filter .3s; }
+.featured-card:hover .featured-thumbnail { filter:saturate(1); }
+.featured-body h3 { font-weight:500; }
+.featured-bottom { border-color:var(--line); }
+.research-path { --path-line:#aabcc7; }
+.path-scroll::-webkit-scrollbar-thumb,.news-scroll::-webkit-scrollbar-thumb { background:#acbbc4; }
+.path-scroll::-webkit-scrollbar-track,.news-scroll::-webkit-scrollbar-track { background:#e5eaed; }
+.year-pill,.type-pill { background:#e5eaed; }
+a:hover { color:#254374; }
+.sample-links { display:flex; flex-wrap:wrap; gap:12px 24px; }
+.back-to-top { bottom:24px; background:var(--bg); }
+/* The track ends exactly on the existing Featured border, below About + News. */
+.pet-lane { grid-column:1/-1; position:relative; height:0; z-index:1; pointer-events:none; }
+.pet-track { position:absolute; height:32px; inset:auto 0 0; overflow:hidden; }
+.pet-actor { --pet-scale:.15; position:absolute; width:30px; height:24px; bottom:-1px; left:0; }
+.pet-actor[hidden] { display:none; }
+.pet-scale { width:200px; height:160px; position:absolute; left:0; bottom:0; transform:scale(var(--pet-scale)); transform-origin:bottom left; }
+.pet-frame { width:200px; height:160px; background-image:url('assets/black-cat/source-sprites.png'); background-size:1448px 1086px; background-repeat:no-repeat; image-rendering:pixelated; transform:scaleX(-1); }
+.sleep-sign { position:absolute; right:4px; top:2px; color:#7a8b95; font:6px ui-monospace,SFMono-Regular,Consolas,monospace; opacity:0; }
+.pet-actor[data-phase="sleep"] .sleep-sign { opacity:1; animation:pet-sleep 5s ease-in-out infinite; }
+@keyframes pet-sleep { 0%,100% { opacity:.25; transform:translateY(0); } 50% { opacity:.65; transform:translateY(-2px); } }
+#pet-preview { padding:0; border:0; background:none; color:var(--accent); cursor:pointer; font:inherit; }
+#pet-preview:hover { color:#254374; }
+@media(max-width:760px) { #about { padding-top:46px; } #news { padding-top:0; } .intro-heading h1 { font-size:44px; letter-spacing:-2.6px; } .journal-header { padding-block:24px; } .pet-actor { --pet-scale:.12; width:24px; height:19.2px; bottom:-.8px; } .sleep-sign { top:0; right:3px; } .sample-links { gap:12px; } footer { align-items:flex-start; } }
+@media(max-width:380px) { .intro-heading h1 { font-size:39px; } .sample-links { flex-direction:column; gap:7px; } }
+@media(prefers-reduced-motion:reduce) { .sleep-sign { animation:none !important; } }
