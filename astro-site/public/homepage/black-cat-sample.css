@@ -29,7 +29,7 @@ a:hover { color:#254374; }
 .pet-actor { --pet-scale:.15; position:absolute; width:30px; height:24px; bottom:-1px; left:0; }
 .pet-actor[hidden] { display:none; }
 .pet-scale { width:200px; height:160px; position:absolute; left:0; bottom:0; transform:scale(var(--pet-scale)); transform-origin:bottom left; }
-.pet-frame { width:200px; height:160px; background-image:url('assets/black-cat/source-sprites.png'); background-size:1448px 1086px; background-repeat:no-repeat; image-rendering:pixelated; transform:scaleX(-1); }
+.pet-frame { position:absolute; bottom:6px; background-image:url('assets/black-cat/motion-sprites.png'); background-size:1810px 1357.5px; background-repeat:no-repeat; image-rendering:pixelated; transform:scaleX(-1); }
 .sleep-sign { position:absolute; right:4px; top:2px; color:#7a8b95; font:6px ui-monospace,SFMono-Regular,Consolas,monospace; opacity:0; }
 .pet-actor[data-phase="sleep"] .sleep-sign { opacity:1; animation:pet-sleep 5s ease-in-out infinite; }
 @keyframes pet-sleep { 0%,100% { opacity:.25; transform:translateY(0); } 50% { opacity:.65; transform:translateY(-2px); } }
