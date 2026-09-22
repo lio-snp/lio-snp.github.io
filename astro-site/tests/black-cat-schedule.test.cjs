@@ -44,11 +44,11 @@ test('84-second manual preview retains the same movement and finishes', () => {
   assert.equal(catVisitScene(84000, 84000).phase, 'away');
 });
 
-test('walking plays eight distinct poses in order without changing travel time', () => {
+test('walking keeps a lazy eight-pose cadence without changing travel time', () => {
   for (const start of [0, 66000]) {
-    const frames = Array.from({length:8}, (_, i) => catVisitScene(start + i * 110, 84000).frame);
+    const frames = Array.from({length:8}, (_, i) => catVisitScene(start + i * 260, 84000).frame);
     assert.deepEqual(frames, [0,1,2,3,4,5,6,7]);
-    assert.equal(catVisitScene(start + 880, 84000).frame, 0);
+    assert.equal(catVisitScene(start + 2080, 84000).frame, 0);
   }
 });
 

@@ -31,7 +31,7 @@ function catSequenceFrame(elapsed, sequence) {
 // One choreography for the daily two-hour visit and the optional 84-second visit.
 function catVisitScene(elapsed, duration) {
   if (elapsed < 0 || elapsed >= duration) return { phase: 'away' };
-  if (elapsed < 18000) return { phase:'enter', group:'walk', frame:Math.floor(elapsed / 110) % 8, progress:elapsed / 18000 };
+  if (elapsed < 18000) return { phase:'enter', group:'walk', frame:Math.floor(elapsed / 260) % 8, progress:elapsed / 18000 };
   if (elapsed < 21000) return { phase:'settle', ...catSequenceFrame(elapsed - 18000, CAT_SETTLE) };
   const wakeAt = duration - 21000;
   const exitAt = duration - 18000;
@@ -45,7 +45,7 @@ function catVisitScene(elapsed, duration) {
     return { phase:'sleep', group:'sleep', frame };
   }
   if (elapsed < exitAt) return { phase:'wake', ...catSequenceFrame(elapsed - wakeAt, CAT_WAKE) };
-  return { phase:'exit', group:'walk', frame:Math.floor((elapsed - exitAt) / 110) % 8, progress:(elapsed - exitAt) / 18000 };
+  return { phase:'exit', group:'walk', frame:Math.floor((elapsed - exitAt) / 260) % 8, progress:(elapsed - exitAt) / 18000 };
 }
 
 function dailyCatScene(now) {
