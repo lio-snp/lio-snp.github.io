@@ -12,3 +12,7 @@ The cat walks on the divider below About and News. Its daily visit uses Beijing 
 Animation uses the supplied eight-column sheet at `public/homepage/assets/black-cat/motion-sprites.png`, copied without image edits. Walking cycles through eight poses at the original relaxed cadence of 260 ms per pose. Sitting down and waking up use timed intermediate poses; sleeping cycles gently through closed-eye poses, with an occasional peek. Each pose is individually clipped, uniformly scaled, and aligned to the same floor to keep the original 30px desktop / 24px mobile anchor. The prior sheet is retained for reference.
 
 Validate with `npm test`, `npm run check`, and `npm run build`. GitHub Actions publishes the Astro `dist/` output to Pages.
+
+The shared favicon uses approved option B, the curled sleeping cat, through `src/components/Favicons.astro`. Assets live in `public/icons/` and `public/favicon.ico`.
+
+Umami Cloud tracks production visits and selected clicks across the homepage and notes. See [ANALYTICS.md](./ANALYTICS.md) for dashboard access, event definitions, export, and excluding your own visits.

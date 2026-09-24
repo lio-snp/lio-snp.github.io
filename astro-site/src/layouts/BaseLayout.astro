@@ -1,5 +1,7 @@
 ---
 import SiteNav from '@/components/SiteNav.astro';
+import Favicons from '@/components/Favicons.astro';
+import Analytics from '@/components/Analytics.astro';
 import type { Locale } from '@/types/locale';
 import '@/styles/global.css';
 
@@ -20,6 +22,8 @@ const { title, description, locale, currentPath, alternatePath } = Astro.props;
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
+    <Favicons />
+    <Analytics />
     <meta name="description" content={description} />
     <link rel="canonical" href={`https://liosnp.github.io${currentPath}`} />
     <meta property="og:type" content="website" />

@@ -12,7 +12,7 @@ for (const item of data.publications) {
 function paperTitle(item) {
   const title = escapeHtml(item.title);
   return item.href
-    ? `<a href="${escapeHtml(item.href)}" target="_blank" rel="noopener noreferrer">${title}</a>`
+    ? `<a href="${escapeHtml(item.href)}" data-paper="${escapeHtml(item.id)}" target="_blank" rel="noopener noreferrer">${title}</a>`
     : title;
 }
 

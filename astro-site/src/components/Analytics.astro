@@ -1,0 +1,13 @@
+---
+// Public site identifier, not an API key. Only the deployed hostname is tracked.
+const enabled = import.meta.env.PROD;
+---
+{enabled && <>
+  <script is:inline defer src="https://cloud.umami.is/script.js"
+    data-website-id="c426cb23-8a40-4c9c-b3bd-be357b3db3d2"
+    data-domains="lio-snp.github.io"
+    data-exclude-search="true"
+    data-exclude-hash="true"
+    data-do-not-track="true"></script>
+  <script is:inline defer src="/analytics-events.js"></script>
+</>}
