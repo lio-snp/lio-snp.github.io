@@ -1,0 +1,90 @@
+{
+  "title": "表征漂移的参照系陷阱：用 154 个快照看 Pythia-1B 到底有没有\"停下来\"",
+  "intro": "一篇关于 Pythia-1B 表征变化的实验笔记。我原本想知道模型在训练后期是否还在变化，后来发现，参照点和指标的选择会改变我对曲线的理解。这里记录实验观察、排错过程，以及还没弄清楚的问题。",
+  "toc": [
+    {
+      "id": "section-0",
+      "title": "0. 两条看似矛盾的曲线"
+    },
+    {
+      "id": "section-1",
+      "title": "1. 背景：两条启发线索"
+    },
+    {
+      "id": "section-2",
+      "title": "2. Setup"
+    },
+    {
+      "id": "section-3",
+      "title": "3. Loss 与表征变化"
+    },
+    {
+      "id": "section-4",
+      "title": "4. 三个指标，三个问题"
+    },
+    {
+      "id": "section-5",
+      "title": "5. CKA 和余弦测的不是一回事"
+    },
+    {
+      "id": "section-6",
+      "title": "6. 漂移长什么样：从神经元到语义"
+    },
+    {
+      "id": "section-7",
+      "title": "7. Debugging notes"
+    },
+    {
+      "id": "section-8",
+      "title": "8. Limitations"
+    },
+    {
+      "id": "section-9",
+      "title": "9. What’s next"
+    },
+    {
+      "id": "section-10",
+      "title": "附：Takeaways"
+    }
+  ],
+  "images": [
+    {
+      "src": "/notes/model-dynamics/figure-01.png",
+      "alt": "漂移速度总览",
+      "width": 2805,
+      "height": 1258
+    },
+    {
+      "src": "/notes/model-dynamics/figure-02.png",
+      "alt": "学习率与漂移速度",
+      "width": 3145,
+      "height": 731
+    },
+    {
+      "src": "/notes/model-dynamics/figure-03.png",
+      "alt": "116k 事件",
+      "width": 3145,
+      "height": 731
+    },
+    {
+      "src": "/notes/model-dynamics/figure-04.png",
+      "alt": "CKA 热力图",
+      "width": 2635,
+      "height": 1462
+    },
+    {
+      "src": "/notes/model-dynamics/figure-05.png?v=16b8d082a673",
+      "alt": "神经元示例卡片",
+      "width": 2635,
+      "height": 1563
+    },
+    {
+      "src": "/notes/model-dynamics/figure-06.png",
+      "alt": "损失与可分性",
+      "width": 2380,
+      "height": 748
+    }
+  ],
+  "tables": 7,
+  "sourceSHA256": "6cc829341f53804efb9da232451408b03dd38cc6453363011fa00c6c4548bf50"
+}

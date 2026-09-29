@@ -1,11 +1,12 @@
 ---
 import BaseLayout from '@/layouts/BaseLayout.astro';
+import ModelDynamicsCard from '@/components/notes/ModelDynamicsCard.astro';
 import BlogCard from '@/components/BlogCard.astro';
 import { getBlogEntries } from '@/lib/content';
 import { sortBlogByDate } from '@/lib/site';
 
 const posts = sortBlogByDate(await getBlogEntries('en'));
-const tags = [...new Set(posts.flatMap((post) => post.data.tags))].sort();
+const tags = [...new Set([...posts.flatMap((post) => post.data.tags), 'Pythia', 'Model dynamics'])].sort();
 
 const postsByYear = posts.reduce<Record<string, typeof posts>>((acc, post) => {
   const year = String(post.data.date.getFullYear());
@@ -43,6 +44,7 @@ const postsByYear = posts.reduce<Record<string, typeof posts>>((acc, post) => {
               <h2 class="year-title">{year}</h2>
             </header>
             <div class="blog-list">
+              {year === '2026' && <ModelDynamicsCard locale="en" />}
               {yearPosts.map((post) => <BlogCard post={post} locale="en" />)}
             </div>
           </section>

@@ -1,0 +1,19 @@
+---
+interface Props { locale?: 'en' | 'zh' }
+const { locale = 'en' } = Astro.props;
+const zh = locale === 'zh';
+---
+<article class="research-note-card" data-post-card data-tags="Pythia,Model dynamics">
+  <p class="note-meta"><time datetime="2026-09-29">29 Sep 2026</time><span> · Pythia · Model dynamics</span></p>
+  <h3><a href={zh ? '/notes/model-dynamics/zh/' : '/notes/model-dynamics/'}>{zh ? '表征漂移的参照系陷阱' : 'Representation drift depends on the reference point'} <span aria-hidden="true">↗</span></a></h3>
+  <p>{zh ? '从 Pythia-1B 的 154 个快照出发，记录我如何理解表征变化、排查指标问题，以及还没弄清楚的跳变。' : 'Following 154 Pythia-1B checkpoints: how I read representation changes, debugged the metrics, and found a jump I still don’t understand.'}</p>
+  <a class="read-note" href={zh ? '/notes/model-dynamics/zh/' : '/notes/model-dynamics/'}>{zh ? '阅读笔记 →' : 'Read note →'}</a>
+</article>
+<style>
+  .research-note-card{padding:24px 0;border-block:1px solid #d4dbdf;max-width:900px}
+  .note-meta{font-size:12px;color:#606b74;margin:0 0 12px}
+  h3{font-size:clamp(18px,2vw,23px);line-height:1.5;font-weight:600;margin:0 0 12px;letter-spacing:-.02em}
+  h3 a{color:#385b95;text-decoration:none}h3 a:hover{text-decoration:underline;text-underline-offset:4px}
+  p:not(.note-meta){font-size:15px;line-height:1.8;color:#606b74;margin:0;max-width:78ch}
+  .read-note{display:inline-block;margin-top:18px;font-size:13px;color:#385b95}
+</style>

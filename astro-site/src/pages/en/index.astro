@@ -1,6 +1,7 @@
 ---
 import { render } from 'astro:content';
 import BaseLayout from '@/layouts/BaseLayout.astro';
+import ModelDynamicsCard from '@/components/notes/ModelDynamicsCard.astro';
 import BlogCard from '@/components/BlogCard.astro';
 import { getPageEntry, getBlogEntries } from '@/lib/content';
 import { sortBlogByDate } from '@/lib/site';
@@ -25,6 +26,7 @@ const { Content } = await render(page);
     <p class="section-kicker">Latest Notes</p>
     <h2 class="section-title" style="font-size:clamp(1.4rem, 2.8vw, 2rem);">Recent Posts</h2>
     <div class="blog-list">
+      <ModelDynamicsCard />
       {posts.map((post) => <BlogCard post={post} locale="en" />)}
     </div>
   </section>

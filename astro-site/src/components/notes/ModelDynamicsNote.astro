@@ -1,0 +1,148 @@
+---
+import Analytics from '../Analytics.astro';
+import Favicons from '../Favicons.astro';
+import chinese from '../../data/notes/model-dynamics.html?raw';
+import english from '../../data/notes/model-dynamics.en.html?raw';
+import note from '../../data/notes/model-dynamics.json';
+import '../../styles/notes.css';
+
+interface Props { locale: 'zh' | 'en' }
+const { locale } = Astro.props;
+const isEnglish = locale === 'en';
+const zhUrl = '/notes/model-dynamics/zh/';
+const enUrl = '/notes/model-dynamics/';
+const figureNames = ['Drift-speed overview', 'Learning rate and drift speed', 'The event near 116k', 'CKA heatmap', 'Neuron exemplars', 'Loss and separability'];
+const englishWithFigures = english.replace(/<!-- FIGURE:(\d+) -->/g, (_, index) => {
+  const image = note.images[Number(index)];
+  const label = figureNames[Number(index)];
+  return `<figure><button class="figure-zoom" type="button" aria-label="Enlarge figure: ${label}"><img src="${image.src}" alt="${label}" width="${image.width}" height="${image.height}" loading="lazy" decoding="async"></button><figcaption>${label} · Click to enlarge</figcaption></figure>`;
+});
+let tableNumber = 0;
+const content = isEnglish ? englishWithFigures.replace(/<table>[\s\S]*?<\/table>/g, table => `<div class="table-scroll" role="region" tabindex="0" aria-label="Data table ${++tableNumber}; scroll horizontally if needed">${table}</div>`) : chinese;
+const toc = [...content.matchAll(/<h2 id="([^"]+)">(.*?)<\/h2>/g)].map(match => ({ id: match[1], title: match[2] }));
+const title = isEnglish ? 'Representation drift depends on the reference point' : '表征漂移的参照系陷阱';
+const subtitle = isEnglish ? 'Following 154 Pythia-1B checkpoints to ask whether the model has stopped changing' : '用 154 个快照看 Pythia-1B 到底有没有“停下来”';
+const intro = isEnglish ? "An experiment note on representation change in Pythia-1B. I started by asking whether the model was still changing late in training, then found that my choice of reference point and metric changed how I read the curves. These are the observations, the debugging steps, and the questions I still have." : note.intro;
+const ui = isEnglish ? {
+  skip: 'Skip to article', home: 'Yanlin Liu home', siteNav: 'Site navigation', kind: 'Experiment notes', contents: 'Contents', sections: 'sections', mobileToc: 'Article contents (mobile)', toc: 'Article contents', back: 'Back to top ↑', figures: 'figures · Click to enlarge', dialog: 'Enlarged experiment figure', close: 'Close image', closeText: 'Close ×', original: 'Open original ↗'
+} : {
+  skip: '跳至正文', home: 'Yanlin Liu 首页', siteNav: '网站导航', kind: '实验笔记', contents: '目录', sections: '节', mobileToc: '文章目录（移动端）', toc: '文章目录', back: '回到顶部 ↑', figures: '张图 · 点击放大', dialog: '查看实验图大图', close: '关闭图片', closeText: '关闭 ×', original: '打开原图 ↗'
+};
+---
+<!doctype html>
+<html lang={isEnglish ? "en" : "zh-CN"}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={intro} />
+    <link rel="canonical" href={new URL(isEnglish ? enUrl : zhUrl, Astro.site)} />
+    <link rel="alternate" hreflang="en" href={new URL(enUrl, Astro.site)} />
+    <link rel="alternate" hreflang="zh-CN" href={new URL(zhUrl, Astro.site)} />
+    <link rel="alternate" hreflang="x-default" href={new URL(enUrl, Astro.site)} />
+    <title>{title} · Yanlin Liu</title>
+    <Favicons />
+    <Analytics />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  </head>
+  <body id="top">
+    <a class="skip-link" href="#article">{ui.skip}</a>
+    <div class="note-shell">
+      <header class="note-header">
+        <a class="wordmark" href="/" aria-label={ui.home}>Yanlin Liu<span aria-hidden="true">.</span></a>
+        <div class="header-actions"><nav aria-label={ui.siteNav}>
+          <a href="/#about">About</a>
+          <a href="/#featured">Research</a>
+          <a href="/#notes">Notes</a>
+        </nav>
+        <nav class="language-switch" aria-label={isEnglish ? 'Language' : '语言'}>
+          <a data-language-link href={zhUrl} lang="zh-CN" hreflang="zh-CN" aria-current={!isEnglish ? 'page' : undefined}>中文</a>
+          <span aria-hidden="true">/</span>
+          <a data-language-link href={enUrl} lang="en" hreflang="en" aria-current={isEnglish ? 'page' : undefined}>EN</a>
+        </nav></div>
+      </header>
+      <main class="reading-layout">
+        <article id="article">
+          <header class="article-header">
+            <div class="eyebrow"><span>Notes</span></div>
+            <h1>{title}</h1>
+            <p class="subtitle">{subtitle}</p>
+            <div class="article-meta"><span>Yanlin Liu</span><span>Pythia · Model dynamics</span><span>{ui.kind}</span></div>
+            <p class="intro" set:html={intro} />
+          </header>
+          <details class="mobile-toc">
+            <summary>{ui.contents} <span>{toc.length} {ui.sections}</span></summary>
+            <nav aria-label={ui.mobileToc}>{toc.map(section => <a href={`#${section.id}`}>{section.title}</a>)}</nav>
+          </details>
+          <div class="note-body" set:html={content} />
+          <a class="back-top" href="#top">{ui.back}</a>
+        </article>
+        <aside class="toc-rail" aria-label={ui.toc}>
+          <div class="toc-inner">
+            <p class="rail-label">On this page</p>
+            <nav>{toc.map(section => <a href={`#${section.id}`}>{section.title}</a>)}</nav>
+            <p class="rail-hint">{note.images.length} {ui.figures}</p>
+          </div>
+        </aside>
+      </main>
+      <footer class="note-footer"><a href="/">← Yanlin Liu</a><span>Notes</span></footer>
+    </div>
+    <dialog class="image-dialog" aria-label={ui.dialog}>
+      <div class="image-toolbar"><p id="image-caption"></p><button type="button" class="close-image" aria-label={ui.close}>{ui.closeText}</button></div>
+      <div class="image-stage"><img id="expanded-image" alt="" /></div>
+      <a class="original-image" target="_blank" rel="noopener">{ui.original}</a>
+    </dialog>
+    <script>
+      const dialog = document.querySelector<HTMLDialogElement>('.image-dialog')!;
+      const expanded = document.querySelector<HTMLImageElement>('#expanded-image')!;
+      const original = document.querySelector<HTMLAnchorElement>('.original-image')!;
+      const caption = document.querySelector<HTMLElement>('#image-caption')!;
+      document.querySelectorAll<HTMLButtonElement>('.figure-zoom').forEach(button => {
+        button.addEventListener('click', () => {
+          const image = button.querySelector('img')!;
+          expanded.src = image.src;
+          expanded.alt = image.alt;
+          original.href = image.src;
+          caption.textContent = image.alt;
+          dialog.showModal();
+          document.body.style.overflow = 'hidden';
+        });
+      });
+      document.querySelector('.close-image')!.addEventListener('click', () => dialog.close());
+      dialog.addEventListener('click', event => { if (event.target === dialog) dialog.close(); });
+      dialog.addEventListener('close', () => { document.body.style.overflow = ''; });
+      const mobileToc = document.querySelector<HTMLDetailsElement>('.mobile-toc')!;
+      mobileToc.querySelectorAll('a').forEach(link => link.addEventListener('click', () => { mobileToc.open = false; }));
+      const sections = [...document.querySelectorAll<HTMLElement>('.note-body h2')];
+      const links = [...document.querySelectorAll<HTMLAnchorElement>('.toc-rail nav a')];
+      let queued = false;
+      const update = () => {
+        const current = sections.filter(section => section.getBoundingClientRect().top <= 150).at(-1) ?? sections[0];
+        links.forEach(link => {
+          if (link.hash === `#${current.id}`) link.setAttribute('aria-current', 'location');
+          else link.removeAttribute('aria-current');
+        });
+        queued = false;
+      };
+      window.addEventListener('scroll', () => { if (!queued) { queued = true; requestAnimationFrame(update); } }, { passive: true });
+      update();
+      // The two editions share section IDs, so language changes keep the reading section.
+      const languageLinks = [...document.querySelectorAll<HTMLAnchorElement>('[data-language-link]')];
+      const syncLanguageLinks = () => {
+        const current = sections.filter(section => section.getBoundingClientRect().top <= 150).at(-1);
+        languageLinks.forEach(link => {
+          const url = new URL(link.href);
+          url.hash = current ? current.id : '';
+          link.href = url.href;
+        });
+      };
+      languageLinks.forEach(link => {
+        link.addEventListener('pointerdown', syncLanguageLinks);
+        link.addEventListener('click', syncLanguageLinks);
+        link.addEventListener('focus', syncLanguageLinks);
+      });
+      syncLanguageLinks();
+    </script>
+  </body>
+</html>

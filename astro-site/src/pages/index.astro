@@ -1,5 +1,6 @@
 ---
 import Favicons from '@/components/Favicons.astro';
+import ModelDynamicsCard from '@/components/notes/ModelDynamicsCard.astro';
 import Analytics from '@/components/Analytics.astro';
 ---
 <!doctype html>
@@ -48,7 +49,7 @@ import Analytics from '@/components/Analytics.astro';
           <a href="#featured" data-nav="featured">Research</a>
           <a href="#research-path" data-nav="research-path">Path</a>
           <a href="#news" data-nav="news">News</a>
-          <a href="/en/blog/">Notes</a>
+          <a href="#notes" data-nav="notes">Notes</a>
           <a href="mailto:snaclp@udel.edu">Email ↗</a>
         </nav>
       </header>
@@ -112,6 +113,12 @@ import Analytics from '@/components/Analytics.astro';
           <p id="results-count" class="visually-hidden" role="status" aria-live="polite"></p>
           <div id="publication-list" class="publication-list"></div>
           <nav id="pagination" class="pagination" aria-label="Research pages"></nav>
+        </section>
+
+        <section class="page-section" id="notes" aria-labelledby="notes-title">
+          <h2 id="notes-title" class="section-title">Notes</h2>
+          <ModelDynamicsCard />
+          <p style="margin-top:20px;font-size:13px"><a href="/en/blog/">All notes →</a></p>
         </section>
 
         <section class="page-section" id="education" aria-labelledby="education-title">

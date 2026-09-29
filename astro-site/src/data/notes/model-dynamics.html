@@ -1,0 +1,104 @@
+
+<h2 id="section-0">0. 两条看似矛盾的曲线</h2>
+<p>我用同一批权重、同一批文本，算了两个数：</p>
+<ul><li>最后一层表征与 <strong>step 0</strong>（完全没训练过的随机初始化）的余弦相似度：末期是 <strong>−0.003</strong>，也就是<strong>几乎正交</strong>。</li><li>最后一层表征与<strong>它上一个快照</strong>的余弦相似度：中位数 <strong>+0.993</strong>，整个训练过程里只有一次低于 0.9。</li></ul>
+<p>同一批数据，一个说"面目全非"，一个说"几乎没动"。<strong>两个数都对。</strong> 这篇文章想说的是：<em>"模型漂移了多远""模型停了没有"这类问题，答案取决于你拿谁当参照、用哪个指标——我最初没有把这两个选择区分清楚。</em></p>
+<h3>TL;DR</h3>
+<ol><li>我一开始想用<strong>一条曲线</strong>回答"模型停了没有"，结果发现自己换了两次变量。</li><li>我以为末期的残余变化"只是学习率还没衰减到零"——查下去发现，<strong>漂移速度与学习率有相关性，但 116k 附近还有一次约 22 倍的跳变值得单独检查</strong>（见第 4.3 节）。</li><li>检查过程中发现了指标实现和快照标注的问题。第 7 节记录了这段排查过程。</li></ol>
+<hr>
+<h2 id="section-1">1. 背景：两条启发线索</h2>
+<p>关于大模型的内部表征，有两类常被并列引用的观察：</p>
+<ul><li><strong>机制侧</strong>：训练过程中会浮现出可解释的结构，比如"归纳头"（induction head）——专门做"复制前文模式"的注意力回路，它的出现与上下文学习能力的变化在时间上相关。</li><li><strong>评估侧</strong>：一个能力"突然出现"，可能只是打分方式造成的。同一个能力换成连续指标，曲线就平滑了——所谓涌现，可能部分是度量的假象。</li></ul>
+<p>这两条线索关注的问题并不相同（一个讲机制与能力，一个讲跨规模评估的度量效应），我把它们放在一起，只是因为它们都指向同一个测量问题：<strong>训练动力学里，"看起来突变"和"其实连续"之间的界线，很依赖你怎么测。</strong></p>
+<p>这两类工作让我想到一个更具体的问题：<strong>如果沿着 Pythia 的 154 个 checkpoint 观察，表征变化更像是连续的漂移，还是偶尔发生的跳变？</strong></p>
+<h3>先把四个词说清楚</h3>
+<ul><li><strong>快照 / checkpoint</strong>：训练过程中每隔一段存下来的模型副本。Pythia 官方公开了 154 个，从第 0 步（随机初始化）到第 143000 步。Hugging Face 上它们叫 revision，本文统一叫<strong>快照</strong>。</li><li><strong>激活值 / activation</strong>：某个神经元看到某段文字时"兴奋"的程度。它就是一个数字。</li><li><strong>隐状态 / hidden state</strong>：模型读完整句话后，内部留下的一串 2048 个数。人类读不懂，所以要想办法把它变成一个点画在平面上。</li><li><strong>正交</strong>：两个向量夹角 90°，余弦相似度为 0。<strong>关键的反直觉点</strong>：在 2048 维空间里，两个随机向量的余弦相似度本来就接近 0。所以后文看到"余弦 ≈ 0"，不要读成"天翻地覆"，它更准确的意思是"没有特别对齐"。</li></ul>
+<hr>
+<h2 id="section-2">2. Setup</h2>
+<p>对象是 <strong>Pythia-1B</strong>——选它是因为它把同一套配方、同一批数据的 154 个中间快照全部公开了。</p>
+<p>我写了一个 <strong>126 条文本的探测集</strong>：9 个语义族（标点、数字/日期、语法、数学、代码、少样本 ICL、人名、情感、定义）× 中英双语 × 每格 7 条。之所以要这么"杂"，是因为我想看的不是"模型懂不懂语法"，而是<strong>同一个神经元在不同阶段被什么点燃</strong>——那需要探测集里同时存在标点、代码、数学式。</p>
+<p>每个快照上做一次前向，记录 5 个采样层（第 0/4/8/12/15 层）的平均池化与末位 token 隐状态、每个 MLP 神经元的峰值激活及触发它的 token、以及这批文本的 loss。</p>
+<p>这次用双卡处理了 154 个 checkpoint，耗时约 4.7 小时。每个 checkpoint 的流程是：下载对应 revision 的权重（4 GB）、做前向计算、保存派生统计，再删除临时权重文件。</p>
+<hr>
+<h2 id="section-3">3. Loss 与表征变化</h2>
+<figure><button class="figure-zoom" type="button" aria-label="放大图片：漂移速度总览"><img src="/notes/model-dynamics/figure-01.png" alt="漂移速度总览" width="2805" height="1258" loading="lazy" decoding="async"></button><figcaption>漂移速度总览 · 点击查看原图</figcaption></figure>
+<p>先看右下角：这 126 条文本上的 loss 从 <strong>10.98 → 3.40</strong>。10.98 是什么概念？Pythia 的词表有 50304 个词，<strong>瞎猜的 loss 就是 10.83</strong>。也就是说模型从"完全随机"走到了真的在预测。</p>
+<p>但它并不是一条平滑的直线：<strong>153 个相邻区间里有 56 次 loss 上升</strong>，最大的一次上升出现在 step 90000（+0.55）。总体趋势明确，细节一点也不"干净"。</p>
+<p>再看左上角：同一时期，最后一层表征与 step 0 的余弦从 1.00 掉到 <strong>−0.003</strong>，接近 0，也就是方向接近正交。</p>
+<p class="lede"><strong>Takeaway：</strong>在这批文本上，loss 总体下降，表征与初始化的方向也逐渐偏离。仅凭 loss 曲线，还不能判断表征是否停止变化。</p>
+<hr>
+<h2 id="section-4">4. 三个指标，三个问题</h2>
+<p>我一开始想用一条曲线回答"停了没有"。后来发现，<strong>与初始化的距离、相邻快照的位移、样本关系结构</strong>，回答的是三个不同的问题。</p>
+<h3>4.1 与初始化的距离：回答"离随机有多远"</h3>
+<p>看左下角的逐层剖面：所有层都从 1.0 出发，在最初几十步内急速坠落。</p>
+<p>这里有个细节值得慢一点看（第 15 层）：</p>
+<div class="table-scroll" role="region" tabindex="0" aria-label="实验数据表 1，宽表可左右滚动"><table><thead><tr><th>step</th><th>与 step 0 的余弦</th></tr></thead><tbody><tr><td>8</td><td>+0.906</td></tr><tr><td>16</td><td>+0.300</td></tr><tr><td>32</td><td>+0.118</td></tr><tr><td>1000</td><td>+0.033</td></tr></tbody></table></div>
+<p class="lede">变化最剧烈的是 8→16 这一步<strong>（0.906 → 0.300），不是第 8 步。而这个区间正好是 </strong>warmup<strong> ——Pythia 的学习率在 1430 步内从 0 线性升到峰值 2.5e-4。</strong>这提醒我，解读早期的变化速度时，也需要考虑学习率正在上升。</p>
+<blockquote><p><strong>一个容易混淆的地方</strong>：我第一版把这个量写成"82.8% 的漂移在 step 100 完成"，两处都错：正确的快照是 <strong>step 128</strong>（我的脚本取了最近的快照却打印了目标值，这是个 bug）；更要紧的是<strong>这个量根本不单调</strong>——step 32 累积 87.9%，step 64 反而降到 82.3%。因为它并不单调，把它叫作"完成度"容易产生误解。</p><p><strong>Takeaway：与随机初始化的距离回答的是"离随机有多远"，不能拿来回答"最近累积了多少变化"。</strong></p></blockquote>
+<h3>4.2 相邻快照的位移：回答"这一步迈了多大"</h3>
+<p>换成相邻快照之间的位移（除以步数，因为后期快照间隔更大）。第 15 层：</p>
+<div class="table-scroll" role="region" tabindex="0" aria-label="实验数据表 2，宽表可左右滚动"><table><thead><tr><th>区间</th><th>每步位移</th></tr></thead><tbody><tr><td>step 8 → 16</td><td><strong>31.1</strong> ← 峰值，warmup 期</td></tr><tr><td>step 142k → 143k</td><td>0.074</td></tr></tbody></table></div>
+<p>差距约 400 倍。<strong>但除了那个例外（见 4.3），后期一直是"很小但非零"。</strong></p>
+<p>为什么"与上一步的余弦"和"与 step 0 的余弦"能差这么多？因为前者的<strong>参照点跟着你一起走</strong>：</p>
+<div class="table-scroll" role="region" tabindex="0" aria-label="实验数据表 3，宽表可左右滚动"><table><thead><tr><th>指标（第 15 层，中位数）</th><th>值</th></tr></thead><tbody><tr><td>与前一个快照的余弦</td><td><strong>+0.993</strong></td></tr><tr><td>与 step 0 的余弦</td><td><strong>−0.009</strong></td></tr></tbody></table></div>
+<blockquote><p><strong>两个技术细节</strong>：(i) 相邻快照的<strong>净位移除以步数 ≠ 真实走过的路程</strong>——中间的往返会抵消，所以早期 8 步间隔与后期 1000 步间隔的比较仍有局限；(ii) 上面这组对照我特意都用了<strong>余弦</strong>（第一版我拿余弦对 L2，那是换了两个变量）。</p></blockquote>
+<h3>4.3 学习率趋势与一次跳变</h3>
+<p>我接着检查了另一种可能：末期的微小位移，<strong>也可能只是学习率还没衰减到零</strong>。Pythia 超参公开：峰值 2.5e-4，cosine 衰减到 2.5e-5，warmup 1430 步。我把它算了出来。</p>
+<figure><button class="figure-zoom" type="button" aria-label="放大图片：学习率与漂移速度"><img src="/notes/model-dynamics/figure-02.png" alt="学习率与漂移速度" width="3145" height="731" loading="lazy" decoding="async"></button><figcaption>学习率与漂移速度 · 点击查看原图</figcaption></figure>
+<div class="table-scroll" role="region" tabindex="0" aria-label="实验数据表 4，宽表可左右滚动"><table><thead><tr><th>量</th><th>结果</th></tr></thead><tbody><tr><td>学习率全程</td><td>降 10 倍（2.5e-4 → 2.5e-5）</td></tr><tr><td>漂移速度全程</td><td>降 <strong>~2.5 个数量级</strong></td></tr><tr><td>warmup 后 log(速度) vs log(学习率) 斜率</td><td><strong>0.71 – 0.89</strong></td></tr><tr><td>该拟合的 <strong>R²</strong></td><td><strong>0.58 – 0.76</strong></td></tr></tbody></table></div>
+<p>这个拟合的 <strong>R² 为 0.58–0.76</strong>。在所用拟合区间内，log(速度) 与 log(学习率) 存在相关性，但它不能单独说明学习率是变化的原因，也没有覆盖全部波动。</p>
+<p>因此，我暂时不把末期的非零位移直接解释为独立于学习率的变化。继续看残差时，我注意到了 116k 附近的一个异常区间：</p>
+<figure><button class="figure-zoom" type="button" aria-label="放大图片：116k 事件"><img src="/notes/model-dynamics/figure-03.png" alt="116k 事件" width="3145" height="731" loading="lazy" decoding="async"></button><figcaption>116k 事件 · 点击查看原图</figcaption></figure>
+<p><strong>在 step 115k → 116k，第 15 层的每步位移从 0.0783 跳到 1.7007——22 倍</strong>，而那一带的学习率在平滑下降。连续两段（115k→116k、116k→117k）都是这个量级，尾部（≥133k）的中位数是 0.0756，事件是它的 11.8 倍。</p>
+<p>我做了几项一致性检查：Hugging Face 上 step114000–118000 五个权重文件的 <strong>sha256 互不相同</strong>。这说明文件内容不同，但还不足以排除加载流程或数值精度的影响。表征侧还观察到了这些现象：</p>
+<ul><li><strong>方向是全局相干的</strong>：126 条探测文本的位移几乎同向，中层 <code>cos(各自位移, 平均位移) = +0.99</code>；而普通区间（133k→134k）只有 <strong>0.58</strong>。</li><li>相邻快照余弦从 <strong>0.998 → 0.184</strong> 再弹回（上图 (c)），末位 token 表征同步（0.997 → 0.339），逐层都发生。</li><li>去掉各自均值、再投影掉共同方向之后，余弦仍只有 0.6 左右——<strong>变化仍然存在，但仅凭这个结果还不能把它定性为旋转。</strong></li></ul>
+<p><strong>在当前探测集上，平均 loss 的变化较小</strong>（+0.013 nats）；分组结果有升有降（code −0.053、names +0.117）。这还不能说明模型的其他行为没有受到影响。</p>
+<p>目前，我把观察分成两部分：</p>
+<ol><li><strong>漂移速度与学习率存在相关性</strong>——上述拟合的 R² 为 0.58–0.76。</li><li><strong>116k 附近出现了约 22 倍的表征位移跳变</strong>——在这批探测文本上，位移方向较一致，平均 loss 未伴随同等明显的变化。其成因还不清楚。</li></ol>
+<p>我原来把这个区间当成了学习率变化下的普通波动。现在更合适的做法是把它单独列出来，继续检查。</p>
+<hr>
+<h2 id="section-5">5. CKA 和余弦测的不是一回事</h2>
+<figure><button class="figure-zoom" type="button" aria-label="放大图片：CKA 热力图"><img src="/notes/model-dynamics/figure-04.png" alt="CKA 热力图" width="2635" height="1462" loading="lazy" decoding="async"></button><figcaption>CKA 热力图 · 点击查看原图</figcaption></figure>
+<p>换成 CKA（Centered Kernel Alignment）——衡量"两组表征的<strong>样本间相似结构</strong>是否一致"的指标，常用于表征相似性分析。看左上角的 154×154 热力图：</p>
+<ul><li><strong>step 0 与所有已训练模型之间是暗的</strong>——初始化确实是个异类。</li><li><strong>后期快照彼此几乎全亮</strong>（CKA ≈ 1）：在当前探测集和 CKA 指标下，后期快照的样本关系结构较接近。</li><li>中间层（第 8 层）与 step 0 的 CKA 从 1.0 一路衰减到 <strong>0.134</strong>；最后一层到 <strong>0.321</strong>。</li></ul>
+<p>和余弦放在一起，出现一个需要小心处理的组合：<strong>最终层与 step 0 的余弦 ≈ 0（正交），但 CKA 还有 0.32。</strong></p>
+<p>容易犯的错是直接说"这只是一次旋转，样本关系被保留了"。<strong>这个推论不成立</strong>：如果两个表征之间只差一个正交变换，线性 CKA 应该<strong>恰好是 1</strong>，不是 0.32。所以 0.32 说明的是别的东西：<strong>既不是无关，也不是同一套结构。</strong></p>
+<p>我加了一个打乱对照来帮助理解这个数值——<strong>把样本对应关系打乱</strong>（保持表征不变，只打乱"哪一行是哪条文本"）：</p>
+<div class="table-scroll" role="region" tabindex="0" aria-label="实验数据表 5，宽表可左右滚动"><table><thead><tr><th></th><th>值</th></tr></thead><tbody><tr><td>真实 CKA(step 0, 最终)</td><td><strong>0.321</strong></td></tr><tr><td>打乱 100 次</td><td>0.095 ± 0.009（最大 0.118）</td></tr></tbody></table></div>
+<p><strong>真实值远高于打乱分布，说明确实存在超出偶然的样本对应结构</strong>；但它既不能读成"保留了 32% 的结构"，也不能读成"相似度排序不变"。</p>
+<p><strong>Takeaway：这两个指标的数值不能直接互换解释。</strong> 余弦说"方向不再对齐"，CKA 说"样本之间的对应还没散掉"，两句话可以同时成立。</p>
+<hr>
+<h2 id="section-6">6. 漂移长什么样：从神经元到语义</h2>
+<figure><button class="figure-zoom" type="button" aria-label="放大图片：神经元示例卡片"><img src="/notes/model-dynamics/figure-05.png?v=16b8d082a673" alt="神经元示例卡片" width="2635" height="1563" loading="lazy" decoding="async"></button><figcaption>神经元示例卡片 · 点击查看原图</figcaption></figure>
+<p>上面全是整体指标。往下钻一个尺度：<strong>单个 MLP 神经元</strong>。做法是经典的 max-activating exemplars——对每个神经元，找出让它激活最高的文本片段。我自动挑出 4 个"改了行"的神经元：</p>
+<div class="table-scroll" role="region" tabindex="0" aria-label="实验数据表 6，宽表可左右滚动"><table><thead><tr><th>神经元</th><th>step 0 的最强样本</th><th>最终快照</th><th>漂移方向</th></tr></thead><tbody><tr><td>L15 n3452</td><td>"the results exceeded all of our"（情感句）</td><td>"except Value Error : pass"</td><td>语义/情感 → <strong>代码异常处理</strong></td></tr><tr><td>L15 n970</td><td>"translate：house -&gt;"、"…体。"</td><td>"except Value Error : pass"、"print ( i )"</td><td>ICL/标点 → <strong>代码关键字</strong></td></tr><tr><td>L12 n6993</td><td>"to Boston , Massachusetts , USA ."</td><td>"17 . 5 degrees C els ius ."</td><td>标点 → <strong>数字/度量单位</strong></td></tr><tr><td>L12 n6880</td><td>"= ( y + 5 ) / 2"</td><td>"cold , and the bill was wrong ."</td><td>数学 → <strong>标点/连词</strong></td></tr></tbody></table></div>
+<p>一个细节：这些神经元在 step 0 时<strong>已有微弱方向性</strong>（n6880 偏向数学式、n6993 偏向标点），训练做的是<strong>放大并专一化</strong>，不是无中生有。峰值从 0.55–1.37 涨到 2.6–14.7。</p>
+<h3>语义和语言，谁先分开？</h3>
+<figure><button class="figure-zoom" type="button" aria-label="放大图片：损失与可分性"><img src="/notes/model-dynamics/figure-06.png" alt="损失与可分性" width="2380" height="748" loading="lazy" decoding="async"></button><figcaption>损失与可分性 · 点击查看原图</figcaption></figure>
+<p>用线性探针（在一层隐状态上做 5 折逻辑回归）测两件事：</p>
+<div class="table-scroll" role="region" tabindex="0" aria-label="实验数据表 7，宽表可左右滚动"><table><thead><tr><th>任务</th><th>step 0</th><th>最终</th></tr></thead><tbody><tr><td>9 类<strong>语义</strong>分类</td><td>0.397</td><td><strong>0.793</strong></td></tr><tr><td>中 / 英<strong>语言</strong>判别</td><td><strong>0.857</strong></td><td>0.920</td></tr></tbody></table></div>
+<p>语言判别在<strong>完全未训练时就有 0.857</strong>；语义分类的 0.397 也远高于九分类的随机水平 0.111（3.6 倍），说明初始化表征里<strong>已经含有可用于区分类别的信号</strong>，训练把同一协议下的准确率从 39.7% 提到 79.3%。</p>
+<p>这里的分类准确率<strong>不能直接等同于"学会了语义"</strong>：类别也可能通过词汇、标点、长度或模板区分。若要比较语言与语义信号出现的速度，还需要专门的拟合。</p>
+<p>另外，9 个语义族的漂移曲线几乎完全重合（第 3 节那张图的右下角）——漂移是<strong>全局性</strong>的，不是某一类输入特有的。</p>
+<hr>
+<h2 id="section-7">7. Debugging notes</h2>
+<p>分析过程中，我发现并修正了三个 bug；第三个是在后续核对中发现的。</p>
+<p><strong>坑 1：CKA 输入维度搞错。</strong> 我的 CKA 函数期望 <code>[快照, 样本, 特征]</code>，而我把 5 个采样层放在了最后一维——等于告诉它"每个样本有 5 个特征"。整张热力图都是错的。</p>
+<p><strong>坑 2：CKA 归一化写错。</strong> 我把 Frobenius 内积 <code>sum(G_i ∘ G_j)</code> 写成了矩阵乘。<strong>发现它的线索是：CKA 矩阵的对角线应该恒等于 1，而我的算出来不是。</strong> 修好坑 2 之后，才意识到矩阵里那些"神秘的暗带"来自坑 1。</p>
+<p><strong>坑 3：最近邻快照打印错。</strong> 我的汇总脚本用 <code>argmin|step - 100|</code> 取快照，实际取到的是 <strong>step 128</strong>，却把 "100" 打印了出来。于是"82.8% 的漂移在 step 100 完成"这句话，从数字到含义都是错的。</p>
+<p class="lede">这几个 bug 让我更留意两个细节：相似度矩阵的对角线是否符合预期，以及脚本显示的快照编号是否真的是实际取到的那个。图能画出来，并不代表我已经把它算对、读对了。</p>
+<hr>
+<h2 id="section-8">8. Limitations</h2>
+<ul><li>探测集是 <strong>126 条手工文本</strong>，不是百万 token 级语料。这里的观察都受这批文本的覆盖范围限制，尚不能直接外推到更广泛的语料。</li><li>只采样了 <strong>5 / 16 层</strong>。</li><li>max-activating exemplars 用的是模型崩溃前的<strong>文本碎片</strong>，不是大规模语料扫描。</li><li><strong>Pythia 的学习率从未降到 0</strong>，所以"表征最终是否收敛"这个问题，用这批快照无法回答。（注意：把学习率设成 0 则权重必然停止更新，所以这不是一个"设成 0 就能验证"的实验，而是在问：<strong>除了学习率设定的速率之外，表征还有没有自己的动力学。</strong> 116k 附近的事件值得进一步检查，但目前还不能据此确定答案。）</li><li>116k 事件的<strong>成因我不知道</strong>。它是不是 Pythia 训练数据顺序的某个边界、是不是与精度/优化器状态有关，我还没有结合训练配置和完整权重弄清楚——目前观察到了相干的表征变化，但成因及其行为影响仍不清楚。</li></ul>
+<hr>
+<h2 id="section-9">9. What’s next</h2>
+<p>我还想弄清第 4.3 节的那个区间：<strong>为什么表征位移出现了约 22 倍的跳变，而当前探测集上的平均 loss 变化较小？</strong></p>
+<p>一个方向是在 Pythia 的其他规模（70M 到 12B）上重复检查，看看是否也有类似事件，以及出现频率是否随规模变化。这可以帮助判断当前观察是否只出现在这一个模型上。</p>
+<p>另一件我想尝试的事是把探测集换成 Pile 里几十万 token——现在所有"持续漂移"的判断都建立在我自己写的 126 条文本上。</p>
+<p>接下来，我想先做这两个检查。</p>
+<hr>
+<h2 id="section-10">附：Takeaways</h2>
+<p><strong>这次实验让我更留意：参照点、指标和层都会影响我对"漂移了多少"的理解。</strong> 下面是我留下的几点体会：</p>
+<ol><li>我会把这两条曲线放在一起看：<strong>与初始化的距离</strong>（回答"离随机有多远"）+ <strong>相邻快照的位移</strong>（回答"这一步迈了多大"）。用前者回答后者，会既夸大早期、又掩盖后期，而且它甚至不单调。</li><li>我之前不小心<strong>换了两个变量</strong>；保持指标一致之后，参照系的区别才更容易看清。</li><li><strong>对照 loss 和表征指标</strong>时，116k 附近的观察说明，它们未必同步变化。</li><li>我也开始留意"残余变化"与学习率趋势的关系。<strong>这次，继续检查残差让我注意到了 116k 附近的事件。</strong></li></ol>
+<h3>References</h3>
+<ul><li><a href="https://arxiv.org/abs/1905.00414" target="_blank" rel="noopener">Similarity of Neural Network Representations Revisited</a>（Kornblith 等，CKA 的出处；第 5 节关于"正交变换下 CKA 应为 1"的依据）</li><li><a href="https://arxiv.org/abs/2209.11895" target="_blank" rel="noopener">In-context Learning and Induction Heads</a>（Olsson 等，机制侧线索）</li><li><a href="https://arxiv.org/abs/2304.15004" target="_blank" rel="noopener">Are Emergent Abilities of Large Language Models a Mirage?</a>（Schaeffer 等，评估侧线索）</li><li><a href="https://arxiv.org/abs/2304.01373" target="_blank" rel="noopener">Pythia: A Suite for Analyzing Large Language Models Across Training and Scaling</a>（Biderman 等，本文用的 154 个快照）</li></ul>
