@@ -55,7 +55,7 @@ const toc = [{id:'setup', title: en ? 'Setup' : '先把问题缩小'}, ...report
           <header class="article-header prose">
             <div class="eyebrow"><span>Notes</span>{preview && <span class="demo-label">{en ? 'Draft' : '草稿'}</span>}</div>
             <h1>{title}</h1>
-            <div class="article-meta"><span>Yanlin Liu</span><span>October 2026</span><span>{en ? 'Experiment notes' : '实验笔记'}</span></div>
+            <div class="article-meta"><span>Yanlin Liu</span><time datetime="2026-10-13">{en ? '13 Oct 2026' : '2026 年 10 月 13 日'}</time><span>{en ? 'Experiment notes' : '实验笔记'}</span></div>
             <p class="intro">{en ? 'I came across a post listing six reasons why combining modules can fail. I wanted to connect each point to something observable: what changes at the interface, in the objective, or during training? I use small controlled examples below to look at those changes and compare a few proposed fixes.' : '我看到一个帖子，列了六种模块缝合容易失败的情况。我想把这些经验对应到能观察的变化上：接口、训练目标或训练过程里，具体发生了什么？下面用几组小对照记录这些变化，也比较几种补救设置的效果。'}</p>
           </header>
           <nav class="section-index prose" aria-label={en ? 'Article sections' : '文章目录'}>{toc.map(s => <a href={`#${s.id}`}>{s.title}</a>)}</nav>

@@ -46,7 +46,7 @@ const postsByYear = posts.reduce<Record<string, typeof posts>>((acc, post) => {
               <h2 class="year-title">{year}</h2>
             </header>
             <div class="blog-list">
-              {year === '2026' && <><StitchingCard locale="zh" /><CrossAssetCard locale="zh" /><ModelDynamicsCard locale="zh" /></>}
+              {year === '2026' && <><CrossAssetCard locale="zh" /><StitchingCard locale="zh" /><ModelDynamicsCard locale="zh" /></>}
               {yearPosts.map((post) => <BlogCard post={post} locale="zh" />)}
             </div>
           </section>

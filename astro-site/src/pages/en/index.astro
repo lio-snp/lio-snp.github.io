@@ -28,8 +28,8 @@ const { Content } = await render(page);
     <p class="section-kicker">Latest Notes</p>
     <h2 class="section-title" style="font-size:clamp(1.4rem, 2.8vw, 2rem);">Recent Posts</h2>
     <div class="blog-list">
-      <StitchingCard />
-          <CrossAssetCard />
+      <CrossAssetCard />
+          <StitchingCard />
       <ModelDynamicsCard />
       {posts.map((post) => <BlogCard post={post} locale="en" />)}
     </div>
