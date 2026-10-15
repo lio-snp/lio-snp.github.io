@@ -1,0 +1,138 @@
+---
+import Favicons from '../Favicons.astro';
+import Analytics from '../Analytics.astro';
+import { editions } from '../../data/notes/cross-asset-interaction/content';
+import '../../styles/notes.css';
+import 'katex/dist/katex.min.css';
+interface Props { locale?: 'en' | 'zh'; preview?: boolean }
+const { locale = 'en', preview = false } = Astro.props;
+const en = locale === 'en';
+const note = editions[locale];
+const base = preview ? '/demos/notes/cross-asset-interaction/' : '/notes/cross-asset-interaction/';
+const canonicalBase = '/notes/cross-asset-interaction/';
+const assets = '/notes/cross-asset-interaction/';
+const figures = {
+  weighted: {file:'weighted-inner-product', alt:'Two feature vectors before and after a diagonal change of metric.', caption: en ? 'Figure 1. A change of metric. The original vectors are orthogonal; applying W½ changes their inner product from 0 to 3.' : '图 1. 特征度量的变化。原向量正交；施加 W½ 后，内积从 0 变为 3。'},
+  timeline: {file:'svb-timeline', alt:'Five ten-stock interaction matrices on March 7, 9, 10, 13 and 17, 2023, with one shared color scale.', caption: en ? 'Figure 2. Five-day return interactions around SVB. The March 10 date marks the bank’s closure. All panels share the February 8–March 7 reference scale; red and blue indicate positive and negative scores.' : '图 2. SVB 事件前后的五日收益率交互。3 月 10 日为 SVB 关闭日期。所有面板使用 2 月 8 日至 3 月 7 日的共同基准，红、蓝分别表示正、负得分。'},
+  subspace: {file:'factor-subspace', alt:'A return vector decomposed into a factor component in the exposure column space and a general residual.', caption: en ? 'Figure 3. The factor component lies in the exposure column space. The residual completes the return vector; no perpendicularity is imposed.' : '图 3. 因子成分落在暴露矩阵的列空间内，残差补足收益向量；这里不施加垂直约束。'}
+};
+const body = (html: string) => html.replace(/<!-- FIGURE:(weighted|timeline|subspace) -->/g, (_, key: keyof typeof figures) => {
+  const fig = figures[key];
+  return `<figure class="${key}-figure"><div class="figure-scroll" tabindex="0" role="region" aria-label="${fig.alt}"><button type="button" class="figure-zoom" aria-label="Enlarge figure: ${fig.alt}"><img src="${assets}${fig.file}.svg" alt="${fig.alt}" loading="lazy" decoding="async"></button></div><figcaption>${fig.caption}<span class="figure-files"><a href="${assets}${fig.file}.svg" target="_blank" rel="noopener">SVG ↗</a><a href="${assets}${fig.file}.png" target="_blank" rel="noopener">PNG ↗</a><a href="${assets}${fig.file}.pdf" target="_blank" rel="noopener">PDF ↗</a></span></figcaption></figure>`;
+});
+---
+<!doctype html>
+<html lang={en ? 'en' : 'zh-CN'}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    {preview && <meta name="robots" content="noindex" />}
+    <meta name="description" content={note.description} />
+    <link rel="canonical" href={new URL(en ? canonicalBase : `${canonicalBase}zh/`, Astro.site)} />
+    <link rel="alternate" hreflang="en" href={new URL(canonicalBase, Astro.site)} />
+    <link rel="alternate" hreflang="zh-CN" href={new URL(`${canonicalBase}zh/`, Astro.site)} />
+    <link rel="alternate" hreflang="x-default" href={new URL(canonicalBase, Astro.site)} />
+    <title>{note.title} · Yanlin Liu</title>
+    <Favicons />
+    {!preview && <Analytics />}
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  </head>
+  <body id="top" class="math-note">
+    <a class="skip-link" href="#article">{en ? 'Skip to article' : '跳至正文'}</a>
+    <div class="note-shell cross-asset-shell">
+      <header class="note-header">
+        <a class="wordmark" href="/">Yanlin Liu<span aria-hidden="true">.</span></a>
+        <div class="header-actions">
+          <nav aria-label={en ? 'Site navigation' : '网站导航'}><a href="/#about">About</a><a href="/#featured">Research</a><a href="/#notes">Notes</a></nav>
+          <nav class="language-switch" aria-label={en ? 'Language' : '语言'}>
+            <a data-language-link href={base} lang="en" aria-current={en ? 'page' : undefined}>EN</a><span>/</span>
+            <a data-language-link href={`${base}zh/`} lang="zh-CN" aria-current={!en ? 'page' : undefined}>中文</a>
+          </nav>
+        </div>
+      </header>
+      <main class="reading-layout">
+        <article id="article">
+          <header class="article-header prose">
+            <div class="eyebrow"><span>Notes</span>{preview && <span class="demo-label">Preview</span>}</div>
+            <h1>{note.title}</h1>
+            <div class="article-meta"><span>Yanlin Liu</span><span>October 2026</span><span>{note.kind}</span></div>
+          </header>
+          <nav class="section-index prose" aria-label={en ? 'Article sections' : '文章目录'}>
+            <a href="#tldr">TL;DR</a>
+            {note.sections.map(section => <a href={`#${section.id}`}>{section.title.replace(/^\d\. /,'')}</a>)}
+          </nav>
+          <div class="note-body">
+            <section class="prose" aria-labelledby="tldr"><h2 id="tldr">TL;DR</h2><div set:html={note.tldr} /></section>
+            {note.sections.map(section => <section aria-labelledby={section.id}><h2 class="prose" id={section.id}>{section.title}</h2><div class="section-content" set:html={body(section.html)} /></section>)}
+            <section class="prose sources" aria-labelledby="sources"><h2 id="sources">{note.sourcesTitle}</h2><div set:html={note.sources} /><p class="data-link"><a href={`${assets}figure-data.json`}>{en ? 'Heatmap data and calculation details' : '热图数据与计算口径'} ↗</a></p></section>
+          </div>
+          <div class="prose"><a class="back-top" href="#top">{en ? 'Back to top ↑' : '回到顶部 ↑'}</a></div>
+        </article>
+      </main>
+      <footer class="note-footer"><a href="/">← Yanlin Liu</a><span>{preview ? 'Notes / Preview' : 'Notes'}</span></footer>
+    </div>
+    <dialog class="image-dialog" aria-label={en ? 'Enlarged figure' : '查看大图'}>
+      <div class="image-toolbar"><p id="image-caption"></p><button class="close-image" type="button">{en ? 'Close ×' : '关闭 ×'}</button></div>
+      <div class="image-stage"><img id="expanded-image" alt="" /></div>
+      <a class="original-image" target="_blank" rel="noopener">{en ? 'Open original SVG ↗' : '打开 SVG 原图 ↗'}</a>
+    </dialog>
+    <script>
+      const dialog = document.querySelector<HTMLDialogElement>('.image-dialog')!;
+      const expanded = document.querySelector<HTMLImageElement>('#expanded-image')!;
+      const original = document.querySelector<HTMLAnchorElement>('.original-image')!;
+      const caption = document.querySelector<HTMLElement>('#image-caption')!;
+      document.querySelectorAll<HTMLButtonElement>('.figure-zoom').forEach(button => button.addEventListener('click', () => {
+        const image = button.querySelector('img')!;
+        expanded.src = image.src; expanded.alt = image.alt; original.href = image.src; caption.textContent = image.alt;
+        dialog.showModal();
+      }));
+      document.querySelector('.close-image')!.addEventListener('click', () => dialog.close());
+      dialog.addEventListener('click', event => { if (event.target === dialog) dialog.close(); });
+      const sections = [...document.querySelectorAll<HTMLElement>('.note-body h2')];
+      const languageLinks = [...document.querySelectorAll<HTMLAnchorElement>('[data-language-link]')];
+      languageLinks.forEach(link => link.addEventListener('click', () => {
+        const current = sections.filter(section => section.getBoundingClientRect().top <= 150).at(-1);
+        const url = new URL(link.href); url.hash = current?.id ?? window.location.hash; link.href = url.href;
+      }));
+    </script>
+  </body>
+</html>
+<style is:global>
+  .cross-asset-shell .reading-layout{display:block;max-width:1060px;margin:auto;padding-top:58px}
+  .cross-asset-shell .prose,.cross-asset-shell .section-content>p,.cross-asset-shell .equation{max-width:760px;margin-left:auto;margin-right:auto}
+  body.math-note{background:#fcfcfb;--paper:#fcfcfb;--line:#e0e2e3;--muted:#6a7077}
+  .cross-asset-shell .note-body,.cross-asset-shell h1,.cross-asset-shell .note-body h2{font-family:Georgia,'Times New Roman','Songti SC','Noto Serif CJK SC',serif}
+  .cross-asset-shell .note-body{font-size:18px;line-height:1.8}
+  .cross-asset-shell h1{max-width:750px;font-size:clamp(29px,3vw,36px);font-weight:400;line-height:1.22;letter-spacing:-.025em}
+  .cross-asset-shell .note-body h2{font-size:22px;font-weight:400;letter-spacing:-.012em}
+  .cross-asset-shell .note-body p{margin-top:20px;margin-bottom:20px}
+  .cross-asset-shell .article-header{border-bottom:1px solid var(--line);padding-bottom:5px}
+  .cross-asset-shell .article-meta{margin-bottom:30px}
+  .cross-asset-shell .section-index{display:flex;flex-wrap:wrap;gap:8px 22px;padding:16px 0;margin-bottom:44px;font-size:12px;line-height:1.8}
+  .cross-asset-shell .section-index a{color:var(--muted)}
+  .cross-asset-shell .section-index a:hover{color:var(--accent)}
+  .cross-asset-shell .note-body h2{margin-top:50px}
+  .cross-asset-shell .note-body section:first-child h2{margin-top:0}
+  .cross-asset-shell .equation{overflow-x:auto;padding:6px 0;scrollbar-width:thin;font-size:.94em;line-height:1.5}
+  .cross-asset-shell .equation .katex-display{margin:16px 0}
+  .cross-asset-shell .equation .katex-display>.katex{white-space:nowrap}
+  .cross-asset-shell figure{margin:34px auto 30px}
+  .cross-asset-shell .figure-scroll{overflow:auto;scrollbar-width:thin}
+  .cross-asset-shell .figure-zoom{border:0;border-radius:0;background:transparent}
+  .cross-asset-shell .figure-zoom:hover{outline:1px solid var(--line);outline-offset:-1px}
+  .cross-asset-shell .timeline-figure .figure-zoom{min-width:900px}
+  .cross-asset-shell .weighted-figure{max-width:640px}
+  .cross-asset-shell .subspace-figure{max-width:500px}
+  .cross-asset-shell figcaption{max-width:760px;margin:14px auto 0;padding:0 2px}
+  .cross-asset-shell .figure-files{display:inline-flex;gap:12px;margin-left:14px;font-family:ui-sans-serif,system-ui,sans-serif;font-size:10px}
+  .cross-asset-shell figcaption{font-family:Georgia,'Times New Roman','Songti SC',serif;font-size:13px;line-height:1.65}
+  .cross-asset-shell .figure-zoom img{mix-blend-mode:multiply}
+  .cross-asset-shell .sources{margin-top:48px;padding-top:26px;border-top:1px solid var(--line)}
+  .cross-asset-shell .sources h2{margin-top:0;font-size:16px}
+  .cross-asset-shell .references{padding-left:18px;font-size:13px;line-height:1.7}
+  .cross-asset-shell .data-link{font-size:12px}
+  .cross-asset-shell .image-stage img{max-height:calc(90dvh - 140px)}
+  @media(max-width:850px){.cross-asset-shell .note-body{font-size:17px}.cross-asset-shell .note-body h2{font-size:21px}.cross-asset-shell .reading-layout{padding-top:38px}.cross-asset-shell .weighted-figure .figure-zoom{min-width:500px}.cross-asset-shell .equation .katex-display{text-align:left}.cross-asset-shell .equation .katex-display>.katex{padding-right:12px;text-align:left}.cross-asset-shell figcaption{font-size:12px}}
+</style>
