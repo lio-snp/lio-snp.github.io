@@ -2,6 +2,7 @@
 import Favicons from '@/components/Favicons.astro';
 import ModelDynamicsCard from '@/components/notes/ModelDynamicsCard.astro';
 import CrossAssetCard from '@/components/notes/CrossAssetCard.astro';
+import StitchingCard from '@/components/notes/StitchingCard.astro';
 import Analytics from '@/components/Analytics.astro';
 ---
 <!doctype html>
@@ -118,6 +119,7 @@ import Analytics from '@/components/Analytics.astro';
 
         <section class="page-section" id="notes" aria-labelledby="notes-title">
           <h2 id="notes-title" class="section-title">Notes</h2>
+          <StitchingCard />
           <CrossAssetCard />
           <ModelDynamicsCard />
           <p style="margin-top:20px;font-size:13px"><a href="/en/blog/">All notes →</a></p>

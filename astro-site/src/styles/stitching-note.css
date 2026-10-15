@@ -1,0 +1,77 @@
+/* Demo-only mathematical-note presentation. Data and plotting logic stay separate. */
+body.stitching-note {
+  --paper: #fcfcfb;
+  --line: #e0e2e3;
+  --muted: #6a7077;
+  --note-serif: Georgia, 'Times New Roman', 'Songti SC', 'Noto Serif CJK SC', serif;
+  background: var(--paper);
+}
+
+.stitching-shell .reading-layout { display: block; max-width: 1060px; margin: auto; padding-top: 58px; }
+.stitching-shell article { max-width: 760px; margin: auto; }
+.stitching-shell h1, .stitching-shell .intro, .stitching-shell .note-body { font-family: var(--note-serif); }
+.stitching-shell h1 { font-size: clamp(29px, 3vw, 36px); font-weight: 400; line-height: 1.22; letter-spacing: -.025em; }
+.stitching-shell .article-meta { margin-bottom: 30px; }
+.stitching-shell .intro { border: 0; padding: 0; margin: 24px 0 30px; font-size: 18px; line-height: 1.8; color: var(--ink); }
+.stitching-shell .article-header { border-bottom: 1px solid var(--line); }
+.stitching-shell .section-index { display: flex; flex-wrap: wrap; gap: 8px 22px; padding: 16px 0; margin-bottom: 44px; font-size: 12px; line-height: 1.8; }
+.stitching-shell .section-index a { color: var(--muted); }
+.stitching-shell .section-index a:hover, .stitching-shell .section-index a[aria-current] { color: var(--accent); }
+.stitching-shell .note-body { font-size: 18px; line-height: 1.8; overflow-wrap: break-word; }
+.stitching-shell .note-body > section { margin-top: 60px; }
+.stitching-shell .note-body h2 { margin-top: 60px; font-size: 22px; font-weight: 400; letter-spacing: -.012em; line-height: 1.4; }
+.stitching-shell .note-body > h2:first-child, .stitching-shell .note-body section > h2 { margin-top: 0; }
+.stitching-shell .note-body h3 { font-size: 18px; font-weight: 400; }
+.stitching-shell .note-body p { margin-top: 20px; margin-bottom: 20px; }
+.stitching-shell .note-body .lede { border: 0; padding: 0; margin: 26px 0; color: var(--ink); }
+.stitching-shell .note-body .lede strong { font-weight: 400; font-style: italic; }
+.stitching-shell .note-body em { font-style: italic; color: inherit; }
+.stitching-shell .note-body code { border-radius: 0; background: #f0f1f2; }
+
+/* Horizontal rules and tabular figures, without shaded header bands. */
+.stitching-shell .table-scroll { margin: 30px 0; border-top: 1px solid #7e858b; border-bottom: 1px solid #7e858b; }
+.stitching-shell .note-body table { font-size: 14px; line-height: 1.65; }
+.stitching-shell .note-body th, .stitching-shell .note-body td { padding: 12px; min-width: 100px; }
+.stitching-shell .note-body th { background: none; color: var(--ink); font-weight: 400; border-bottom: 1px solid #aeb3b7; white-space: normal; }
+.stitching-shell .note-body td { border-bottom: 1px solid var(--line); }
+.stitching-shell .note-body th:first-child, .stitching-shell .note-body td:first-child { padding-left: 0; min-width: 165px; }
+.stitching-shell .note-body th:last-child, .stitching-shell .note-body td:last-child { padding-right: 0; }
+.stitching-shell .note-body tbody tr:nth-child(even) { background: none; }
+
+/* Open figures: controls above the drawing, title and caption below it. */
+.stitching-shell .note-body figure.results-plot,
+.stitching-shell .note-body figure.tensor-mapping,
+.stitching-shell .note-body figure.fusion-order { margin: 38px 0; padding: 0; border: 0; border-radius: 0; background: transparent; }
+.stitching-shell .note-body figure figcaption { font-family: var(--note-serif); font-size: 13px; line-height: 1.65; margin: 14px 0 0; color: var(--muted); }
+.stitching-shell .note-body figure .figure-title { color: var(--ink); font-style: italic; }
+.stitching-shell .note-body figure .plot-controls, .stitching-shell .note-body figure .mode-controls { margin: 0 0 22px; font-family: 'DM Sans', sans-serif; }
+.stitching-shell .note-body figure .plot-controls select { background: transparent; border-radius: 0; border-color: var(--line); }
+.stitching-shell .note-body figure .mode-controls { gap: 8px 20px; }
+.stitching-shell .note-body figure .mode-controls button { border: 0; border-bottom: 1px solid transparent; border-radius: 0; padding: 6px 0; background: transparent; color: var(--muted); }
+.stitching-shell .note-body figure .mode-controls button[aria-pressed='true'] { background: transparent; border-color: var(--accent); color: var(--accent); }
+.stitching-shell .note-body figure .chart { font-family: var(--note-serif); }
+.stitching-shell .note-body figure .chart [data-y-ticks] line { stroke: #e0e2e3; stroke-width: .6; }
+.stitching-shell .note-body figure .plot-legend { font-family: 'DM Sans', sans-serif; margin-top: 18px; }
+.stitching-shell .note-body figure .plot-status { margin: 14px 0 0; }
+.stitching-shell .note-body figure .diagram-status { border: 0; padding: 0; min-height: 0; color: var(--ink); font-family: var(--note-serif); font-size: 14px; }
+.stitching-shell .note-body figure .matrix-heading, .stitching-shell .note-body figure .channel-key, .stitching-shell .note-body figure .input-label { font-family: 'DM Sans', sans-serif; }
+.stitching-shell .note-body figure .token { border-radius: 0; border-color: transparent; }
+.stitching-shell .note-body figure .token b { font-family: var(--note-serif); font-weight: 400; }
+.stitching-shell .note-body figure .token[data-channel='0'], .stitching-shell .note-body figure .channel-key i[data-channel='0'] { background: #edf1f6; }
+.stitching-shell .note-body figure .token[data-channel='1'], .stitching-shell .note-body figure .channel-key i[data-channel='1'] { background: #edf2ef; }
+.stitching-shell .note-body figure .token[data-channel='2'], .stitching-shell .note-body figure .channel-key i[data-channel='2'] { background: #f2eef4; }
+.stitching-shell .note-body figure .value { border-radius: 0; border: 0; background: #edf1f6; }
+.stitching-shell .note-body figure .value[data-sign='-1'] { background: #eff0f1; }
+.stitching-shell .note-body figure .pipeline-name { font-weight: 400; color: var(--ink); }
+.stitching-shell .note-body figure .result { background: transparent; border: 0; border-radius: 0; border-block: 1px solid var(--line); }
+.stitching-shell .note-body figure .result b { font-family: var(--note-serif); font-weight: 400; }
+.stitching-shell .references { font-size: 13px; line-height: 1.7; }
+
+@media (max-width: 850px) {
+  .stitching-shell .reading-layout { padding-top: 38px; }
+  .stitching-shell .note-body, .stitching-shell .intro { font-size: 17px; }
+  .stitching-shell .note-body h2 { font-size: 21px; }
+  .stitching-shell .note-body > section { margin-top: 48px; }
+  .stitching-shell .section-index { gap: 8px 18px; margin-bottom: 36px; }
+  .stitching-shell .note-body figure figcaption { font-size: 12px; }
+}

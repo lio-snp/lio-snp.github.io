@@ -1,0 +1,106 @@
+---
+interface Props { locale?: 'zh' | 'en' }
+const { locale = 'zh' } = Astro.props;
+const en = locale === 'en';
+const ui = en ? {
+  kind: 'Mechanism sketch · Interactive', title: 'What disappears when we average first?',
+  controls: 'Relationship between the two streams', aligned: 'Aligned', opposite: 'Opposite', shifted: 'Shift by 2',
+  inputs: 'Two streams · 8 positions each', early: 'Combine, then average', late: 'Average, then combine',
+  earlyStep: 'Multiply matching positions', lateStep: 'Reduce each stream to one mean',
+  products: 'Products by position', earlyMean: 'mean(x × z)', lateMean: 'mean(x) × mean(z)',
+  samePair: 'The pair is always (0, 0).',
+  alignedStatus: 'Aligned: every product is +1. The mean product is +1; averaging first gives the pair (0, 0).',
+  oppositeStatus: 'Opposite: every product is −1. The mean product is −1; averaging first still gives the pair (0, 0).',
+  shiftedStatus: 'Shifted by two positions: four products are +1 and four are −1. Their mean is 0; averaging first still gives the pair (0, 0).',
+  caption: 'An exact toy calculation, not a trained network. Multiplication is one illustrative cross-statistic: it keeps a relationship that separate averages discard in these examples. Other tasks may need a different summary.',
+  nojs: 'JavaScript is off: the aligned example is shown.',
+} : {
+  kind: '机制示意 · 可交互', title: '如果先取平均，什么会消失？',
+  controls: '两条序列的关系', aligned: '同向', opposite: '反向', shifted: '错开 2 格',
+  inputs: '两条序列 · 各 8 个位置', early: '先结合，再取平均', late: '先取平均，再结合',
+  earlyStep: '相同位置相乘', lateStep: '每条序列先压成一个均值',
+  products: '各位置的乘积', earlyMean: 'mean(x × z)', lateMean: 'mean(x) × mean(z)',
+  samePair: '得到的始终是 (0, 0)。',
+  alignedStatus: '同向：所有乘积都是 +1，平均乘积为 +1；先取平均则只剩 (0, 0)。',
+  oppositeStatus: '反向：所有乘积都是 −1，平均乘积为 −1；先取平均，仍然只剩 (0, 0)。',
+  shiftedStatus: '错开两格：四个乘积是 +1，四个是 −1，平均为 0；先取平均，仍然只剩 (0, 0)。',
+  caption: '这是可直接算出的玩具例子，不是训练后的网络。相乘只是一个示意用的交叉统计量：在这些例子中，它留下了分别取平均会丢掉的关系。换一个任务，所需的汇总方式也可能不同。',
+  nojs: 'JavaScript 未开启：当前展示同向序列。',
+};
+const x = [1, 1, 1, 1, -1, -1, -1, -1];
+const signed = (value: number) => value > 0 ? '+1' : '−1';
+---
+
+<figure class="fusion-order" data-fusion-order data-aligned-status={ui.alignedStatus} data-opposite-status={ui.oppositeStatus} data-shifted-status={ui.shiftedStatus}>
+  <div class="mode-controls" role="group" aria-label={ui.controls}>
+    <button type="button" data-relation="aligned" aria-pressed="true" disabled>{ui.aligned}</button>
+    <button type="button" data-relation="opposite" aria-pressed="false" disabled>{ui.opposite}</button>
+    <button type="button" data-relation="shifted" aria-pressed="false" disabled>{ui.shifted}</button>
+  </div>
+  <div class="streams-panel">
+    <div class="input-label">{ui.inputs}</div>
+    <div class="stream-row"><code>x</code><div class="stream" role="img" aria-label={`x: ${x.join(', ')}`}>{x.map(value => <span class="value" data-sign={value} aria-hidden="true">{signed(value)}</span>)}</div><span class="mean">mean = 0</span></div>
+    <div class="stream-row"><code>z</code><div class="stream" data-z-stream role="img" aria-label={`z: ${x.join(', ')}`}>{x.map(value => <span class="value" data-sign={value} aria-hidden="true">{signed(value)}</span>)}</div><span class="mean">mean = 0</span></div>
+  </div>
+  <div class="pipelines">
+    <div class="pipeline">
+      <strong class="pipeline-name">{ui.early}</strong>
+      <span class="pipeline-step">{ui.earlyStep}</span>
+      <div class="stream product-stream" data-products role="img" aria-label={`${ui.products}: ${Array(8).fill(1).join(', ')}`}>{x.map(() => <span class="value" data-sign="1" aria-hidden="true">+1</span>)}</div>
+      <span class="flow-arrow" aria-hidden="true">↓</span>
+      <div class="result"><code>{ui.earlyMean}</code><b data-product-mean>+1</b></div>
+    </div>
+    <div class="pipeline">
+      <strong class="pipeline-name">{ui.late}</strong>
+      <span class="pipeline-step">{ui.lateStep}</span>
+      <div class="pooled-pair"><span><code>mean(x)</code><b>0</b></span><span><code>mean(z)</code><b>0</b></span></div>
+      <span class="flow-arrow" aria-hidden="true">↓</span>
+      <div class="result"><code>{ui.lateMean}</code><b>0</b></div>
+      <span class="pair-caption">{ui.samePair}</span>
+    </div>
+  </div>
+  <p class="diagram-status" role="status" aria-live="polite" aria-atomic="true" data-fusion-status>{ui.alignedStatus}</p>
+  <figcaption><span class="figure-title">{ui.title}</span> {ui.caption}</figcaption>
+  <noscript><p class="no-script">{ui.nojs}</p></noscript>
+</figure>
+
+<script>
+  document.querySelectorAll<HTMLElement>('[data-fusion-order]').forEach(root => {
+    const x = [1, 1, 1, 1, -1, -1, -1, -1];
+    const buttons = [...root.querySelectorAll<HTMLButtonElement>('[data-relation]')];
+    const zStream = root.querySelector<HTMLElement>('[data-z-stream]')!;
+    const products = root.querySelector<HTMLElement>('[data-products]')!;
+    const productLabel = products.getAttribute('aria-label')!.split(':')[0];
+    const status = root.querySelector<HTMLElement>('[data-fusion-status]')!;
+    const sign = (value: number) => value > 0 ? '+1' : value < 0 ? '−1' : '0';
+    const updateStream = (element: HTMLElement, values: number[], label: string) => {
+      element.setAttribute('aria-label', `${label}: ${values.join(', ')}`);
+      element.querySelectorAll<HTMLElement>('.value').forEach((cell, i) => {
+        cell.dataset.sign = String(values[i]);
+        cell.textContent = sign(values[i]);
+      });
+    };
+    buttons.forEach(button => {
+      button.disabled = false;
+      button.addEventListener('click', () => {
+        const relation = button.dataset.relation!;
+        const z = x.map((value, i) => relation === 'opposite' ? -value : relation === 'shifted' ? x[(i + 2) % x.length] : value);
+        const paired = x.map((value, i) => value * z[i]);
+        updateStream(zStream, z, 'z');
+        updateStream(products, paired, productLabel);
+        root.querySelector('[data-product-mean]')!.textContent = sign(paired.reduce((sum, value) => sum + value, 0) / paired.length);
+        buttons.forEach(other => other.setAttribute('aria-pressed', String(other === button)));
+        status.textContent = root.dataset[`${relation}Status`] ?? '';
+      });
+    });
+  });
+</script>
+
+<style>
+  .fusion-order{--fo-ink:#262927;--fo-blue:#385b95;--fo-line:#d4dbdf;--fo-muted:#606b74;margin:32px 0;padding:24px;border:1px solid var(--fo-line);border-radius:6px;background:#f8f9fa;color:var(--fo-ink);font:inherit;line-height:1.6}.diagram-heading{display:grid;gap:7px}.kind{font-size:11px;color:var(--fo-muted);letter-spacing:.025em}.diagram-title{font-size:18px;font-weight:600;line-height:1.5}
+  .mode-controls{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0}.mode-controls button{border:1px solid var(--fo-line);border-radius:4px;padding:9px 12px;min-height:42px;background:transparent;color:var(--fo-muted);font:inherit;font-size:12px;line-height:1.5;cursor:pointer}.mode-controls button[aria-pressed="true"]{background:#e8edf4;border-color:#9aacc6;color:var(--fo-blue)}.mode-controls button:focus-visible{outline:2px solid var(--fo-blue);outline-offset:3px}.mode-controls button:disabled{cursor:default}
+  .input-label{font-size:12px;color:var(--fo-muted);margin:0 0 12px}.stream-row{display:grid;grid-template-columns:16px minmax(0,1fr) 75px;align-items:center;gap:10px;margin:8px 0}.stream-row>code{background:none;padding:0;font-size:13px}.stream{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:4px}.value{display:grid;place-items:center;min-height:34px;min-width:0;font:11px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;border-radius:3px;border:1px solid #d5deea;color:#385b95;background:#dce6f3}.value[data-sign="-1"]{color:#535c64;background:#e5e8eb;border-color:#d9dde0}.mean{font:11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--fo-muted);white-space:nowrap}
+  .pipelines{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:26px}.pipeline{display:flex;flex-direction:column;min-width:0;align-items:stretch;border-top:1px solid var(--fo-line);padding-top:18px}.pipeline-name{font-size:14px;font-weight:600;color:var(--fo-blue)}.pipeline-step{font-size:11px;color:var(--fo-muted);margin:7px 0 16px}.product-stream{min-height:62px;align-content:center}.product-stream .value{font-size:10px;min-height:30px}.pooled-pair{display:flex;align-items:center;justify-content:center;gap:30px;min-height:62px}.pooled-pair>span{display:grid;gap:4px;text-align:center}.pooled-pair code,.result code{font-size:11px;background:none;padding:0;color:var(--fo-muted)}.pooled-pair b{font-size:18px;font-weight:500}.flow-arrow{text-align:center;color:#8192a7;font-size:21px;line-height:1.4;margin:10px 0}.result{border:1px solid var(--fo-line);border-radius:4px;min-height:75px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;background:#f1f3f4}.result b{font-size:23px;font-weight:500;color:var(--fo-blue);font-variant-numeric:tabular-nums}.pair-caption{font-size:11px;color:var(--fo-muted);text-align:center;margin-top:10px}
+  .fusion-order .diagram-status{min-height:3.2em;margin:20px 0 0;padding-top:16px;border-top:1px solid var(--fo-line);font-size:13px;color:var(--fo-blue)}.fusion-order figcaption{font-size:12px;color:var(--fo-muted);margin:12px 0 0;line-height:1.75}.no-script{font-size:12px;color:var(--fo-muted)}
+  @media(max-width:560px){.fusion-order{padding:18px 14px}.diagram-title{font-size:16px}.stream-row{grid-template-columns:12px minmax(0,1fr);gap:7px}.mean{grid-column:2;text-align:right;margin-bottom:4px}.pipelines{grid-template-columns:1fr;gap:24px}.stream{gap:3px}.product-stream .value{font-size:11px}.pipeline-step{margin-bottom:8px}.product-stream{min-height:44px}.value{min-height:31px}.flow-arrow{margin:5px 0}}
+</style>

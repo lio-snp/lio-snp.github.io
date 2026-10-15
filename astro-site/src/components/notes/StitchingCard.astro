@@ -1,0 +1,20 @@
+---
+interface Props { locale?: 'en' | 'zh' }
+const { locale = 'en' } = Astro.props;
+const zh = locale === 'zh';
+const url = zh ? '/notes/module-stitching/zh/' : '/notes/module-stitching/';
+---
+<article class="research-note-card" data-post-card data-tags="Deep learning,Module integration">
+  <p class="note-meta"><time datetime="2026-10-15">15 Oct 2026</time><span> · Deep learning · Module integration</span></p>
+  <h3><a href={url}>{zh ? '模块接上了，为什么没变好？' : 'The modules fit. Why didn’t the model improve?'} <span aria-hidden="true">↗</span></a></h3>
+  <p>{zh ? '六组小实验，检查模块组合后的张量语义、训练目标、更新尺度、容量、梯度和融合顺序。' : 'Six small experiments on tensor conventions, training objectives, update scales, capacity, gradients, and fusion order.'}</p>
+  <a class="read-note" href={url}>{zh ? '阅读笔记 →' : 'Read note →'}</a>
+</article>
+<style>
+  .research-note-card{padding:24px 0;border-block:1px solid #d4dbdf;max-width:900px}
+  .note-meta{font-size:12px;color:#606b74;margin:0 0 12px}
+  h3{font-size:clamp(18px,2vw,23px);line-height:1.5;font-weight:600;margin:0 0 12px;letter-spacing:-.02em}
+  h3 a{color:#385b95;text-decoration:none}h3 a:hover{text-decoration:underline;text-underline-offset:4px}
+  p:not(.note-meta){font-size:15px;line-height:1.8;color:#606b74;margin:0;max-width:78ch}
+  .read-note{display:inline-block;margin-top:18px;font-size:13px;color:#385b95}
+</style>

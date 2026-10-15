@@ -1,0 +1,117 @@
+---
+import Favicons from '../Favicons.astro';
+import Analytics from '../Analytics.astro';
+import TensorMapping from './stitching/TensorMapping.astro';
+import FusionOrder from './stitching/FusionOrder.astro';
+import ResultsPlot from './stitching/ResultsPlot.astro';
+import report from '../../data/notes/module-stitching.json';
+import '../../styles/notes.css';
+import '../../styles/stitching-note.css';
+
+interface Props { locale?: 'zh' | 'en'; preview?: boolean }
+const { locale = 'en', preview = false } = Astro.props;
+const en = locale === 'en';
+const t = (pair: {zh: string; en: string}) => pair[locale];
+const canonicalBase = '/notes/module-stitching/';
+const base = preview ? '/demos/notes/module-stitching/' : canonicalBase;
+const englishUrl = preview ? `${base}en/` : base;
+const chineseUrl = preview ? base : `${base}zh/`;
+const title = en ? 'The modules fit. Why didn’t the model improve?' : '模块接上了，为什么没变好？';
+const toc = [{id:'setup', title: en ? 'Setup' : '先把问题缩小'}, ...report.sections.map(s => ({id:s.id,title:t(s.title)})), {id:'takeaways',title:'Takeaways'}];
+---
+<!doctype html>
+<html lang={en ? 'en' : 'zh-CN'}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    {preview && <meta name="robots" content="noindex" />}
+    <link rel="canonical" href={new URL(en ? canonicalBase : `${canonicalBase}zh/`, Astro.site)} />
+    <link rel="alternate" hreflang="en" href={new URL(canonicalBase, Astro.site)} />
+    <link rel="alternate" hreflang="zh-CN" href={new URL(`${canonicalBase}zh/`, Astro.site)} />
+    <link rel="alternate" hreflang="x-default" href={new URL(canonicalBase, Astro.site)} />
+    <meta name="description" content={en ? 'Six small experiments on what can go wrong when combining neural network modules.' : '六组小实验：张量语义、辅助目标、更新尺度、容量、梯度和融合顺序。'} />
+    <title>{title} · Yanlin Liu</title>
+    <Favicons />
+    {!preview && <Analytics />}
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  </head>
+  <body id="top" class="stitching-note">
+    <a class="skip-link" href="#article">{en ? 'Skip to article' : '跳至正文'}</a>
+    <div class="note-shell stitching-shell">
+      <header class="note-header">
+        <a class="wordmark" href="/">Yanlin Liu<span aria-hidden="true">.</span></a>
+        <div class="header-actions">
+          <nav aria-label={en ? 'Site navigation' : '网站导航'}><a href="/#about">About</a><a href="/#featured">Research</a><a href="/#notes">Notes</a></nav>
+          <nav class="language-switch" aria-label={en ? 'Language' : '语言'}>
+            <a data-language-link href={chineseUrl} aria-current={!en ? 'page' : undefined} lang="zh-CN">中文</a><span>/</span>
+            <a data-language-link href={englishUrl} aria-current={en ? 'page' : undefined} lang="en">EN</a>
+          </nav>
+        </div>
+      </header>
+      <main class="reading-layout">
+        <article id="article">
+          <header class="article-header prose">
+            <div class="eyebrow"><span>Notes</span>{preview && <span class="demo-label">{en ? 'Draft' : '草稿'}</span>}</div>
+            <h1>{title}</h1>
+            <div class="article-meta"><span>Yanlin Liu</span><span>October 2026</span><span>{en ? 'Experiment notes' : '实验笔记'}</span></div>
+            <p class="intro">{en ? 'I came across a post listing six reasons why combining modules can fail. I wanted to connect each point to something observable: what changes at the interface, in the objective, or during training? I use small controlled examples below to look at those changes and compare a few proposed fixes.' : '我看到一个帖子，列了六种模块缝合容易失败的情况。我想把这些经验对应到能观察的变化上：接口、训练目标或训练过程里，具体发生了什么？下面用几组小对照记录这些变化，也比较几种补救设置的效果。'}</p>
+          </header>
+          <nav class="section-index prose" aria-label={en ? 'Article sections' : '文章目录'}>{toc.map(s => <a href={`#${s.id}`}>{s.title}</a>)}</nav>
+          <div class="note-body">
+            <h2 id="setup">{en ? 'Setup' : '先把问题缩小'}</h2>
+            <p>{en ? 'I keep the models and tasks small so the comparisons are easier to interpret. Five cases use synthetic data; the capacity case uses handwritten digits. Each condition runs with seeds 17, 29, and 43, with shared data and initialization where the architecture permits.' : '为了更容易区分几种变化，我把模型和任务都设得较小。五组用合成数据，容量实验用手写数字。每个配置都运行种子 17、29、43；结构允许时，对照共享数据与初始化。'}</p>
+            <p>{en ? `The experiments ran on ${report.hardware}. Tables show the mean and minimum–maximum range across the three seeds. Curves show recorded measurements; the two interactive diagrams let me trace tensor entries and calculate sequence relationships directly.` : `实验在 ${report.hardware} 上运行。表格给出三个种子的均值与最小—最大值，曲线展示实测记录。两块交互图分别用来追踪张量元素、直接计算序列关系。`}</p>
+            <p class="lede"><strong>TL;DR</strong> {t(report.tldr)}</p>
+            {report.sections.map(section => <section aria-labelledby={section.id}>
+              <h2 id={section.id}>{t(section.title)}</h2>
+              <p set:html={t(section.setup)} />
+              {section.id === 'shape' && <TensorMapping locale={locale} />}
+              {section.id === 'fusion' && <FusionOrder locale={locale} />}
+              <div class="table-scroll" role="region" tabindex="0" aria-label={`${t(section.title)} ${en ? 'results' : '实验结果'}`}>
+                <table><thead><tr>{section.columns.map(c => <th>{t(c)}</th>)}</tr></thead><tbody>
+                  {section.rows.map(row => <tr>{row.map(cell => <td>{typeof cell === 'string' ? cell : t(cell)}</td>)}</tr>)}
+                </tbody></table>
+              </div>
+              <p set:html={t(section.observation)} />
+              {'gradientResults' in section && section.gradientResults && <ResultsPlot caseData={section.gradientResults} locale={locale} xLabel={en ? 'Layer position' : '层位置'} defaultLog />}
+              <ResultsPlot caseData={section.results} locale={locale} defaultLog={section.id === 'scale'} />
+              <p class="lede"><strong>Takeaway.</strong> <span set:html={t(section.takeaway)} /></p>
+            </section>)}
+            <h2 id="takeaways">Takeaways</h2>
+            <p>{en ? 'Returning to the question in the title, a module can fit while several other things change: the coordinates the next layer expects, the information it receives, or the scale of an update. The controls help me tell these changes apart. They also leave different outcomes to consider: restoring a mapping recovers accuracy, a wider representation accommodates both targets, and the small-data models rank differently under accuracy and loss.' : '回到标题里的问题，模块接上以后，下游预期的位置、收到的信息、一次更新的尺度，都可能发生变化。这几组对照让我能把它们分开看：恢复映射后准确率恢复，扩宽表示后两个目标可以同时拟合，而小样本模型在准确率和 loss 下的排序不同。'}</p>
+            <p>{en ? 'These are short runs on small models, with conditions chosen to make particular effects visible. Applying the same questions to a project would mean checking them under its own data, optimizer, and initialization.' : '这里用了小模型和短训练，部分设置是为了让现象更容易观察。放到具体项目里，还需要结合它的数据、优化器和初始化检查这些问题。'}</p>
+            <h3>{en ? 'Reading that informed the checks' : '相关阅读'}</h3>
+            <ul class="references">
+              <li><a href="https://xhslink.cn/o/Adte32LztK4">{en ? 'The six-point post that prompted this note' : '最初看到的六条经验帖'}</a></li>
+              <li><a href="https://docs.pytorch.org/docs/stable/generated/torch.reshape.html">PyTorch: reshape</a> / <a href="https://docs.pytorch.org/docs/stable/notes/broadcasting.html">broadcasting</a>{en ? ' — tensor shape operations.' : '——张量形状操作。'}</li>
+              <li><a href="https://arxiv.org/abs/2001.06782">Gradient Surgery for Multi-Task Learning</a>{en ? ' — background on interactions between task gradients.' : '——任务梯度相互影响的背景。'}</li>
+              <li><a href="https://arxiv.org/abs/1512.03385">Deep Residual Learning</a> / <a href="https://arxiv.org/abs/2002.04745">On Layer Normalization in the Transformer Architecture</a>{en ? ' — background on residual connections and normalization.' : '——残差连接与归一化的背景。'}</li>
+            </ul>
+          </div>
+          <a class="back-top" href="#top">{en ? 'Back to top ↑' : '回到顶部 ↑'}</a>
+        </article>
+      </main>
+      <footer class="note-footer"><a href="/">← Yanlin Liu</a><span>{preview ? 'Notes / Draft' : 'Notes'}</span></footer>
+    </div>
+    <script>
+      const headings = [...document.querySelectorAll<HTMLElement>('.note-body h2')];
+      const tocLinks = [...document.querySelectorAll<HTMLAnchorElement>('.section-index a')];
+      const languageLinks = [...document.querySelectorAll<HTMLAnchorElement>('[data-language-link]')];
+      let queued = false;
+      const update = () => {
+        const current = headings.filter(h => h.getBoundingClientRect().top <= 150).at(-1) ?? headings[0];
+        tocLinks.forEach(link => { if (link.hash === `#${current.id}`) link.setAttribute('aria-current','location'); else link.removeAttribute('aria-current'); });
+        languageLinks.forEach(link => { const url = new URL(link.href); url.hash = current.id; link.href = url.href; });
+        queued = false;
+      };
+      window.addEventListener('scroll', () => {if (!queued) {queued = true; requestAnimationFrame(update);}}, {passive:true});
+      update();
+    </script>
+  </body>
+</html>
+
+<style>
+  .note-body td:not(:first-child){white-space:nowrap}
+</style>

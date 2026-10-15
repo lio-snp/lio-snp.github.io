@@ -1,0 +1,84 @@
+---
+interface Props { locale?: 'zh' | 'en' }
+const { locale = 'zh' } = Astro.props;
+const en = locale === 'en';
+const ui = en ? {
+  kind: 'Mechanism sketch · Interactive', title: 'Same shape. Different entries.',
+  controls: 'Choose how to change the axes', correct: 'Permute axes', reshape: 'Reshape only',
+  input: 'Input', output: 'Output', channel: 'Channel', source: 'Source indices',
+  correctStatus: 'Each output row keeps one channel across four time steps.',
+  reshapeStatus: 'Reshape groups consecutive values. Each output row now mixes channels and time steps.',
+  caption: 'Values identify entries, not measured activations. Color follows the original channel; the small labels keep track of the source. Both outputs have shape [3, 4]. Only permute changes the axes while preserving their meaning.',
+  nojs: 'JavaScript is off: the correct axis permutation is shown.',
+} : {
+  kind: '机制示意 · 可交互', title: '形状相同，里面却不是同一回事。',
+  controls: '选择调整轴的方式', correct: '交换轴 permute', reshape: '只改形状 reshape',
+  input: '输入', output: '输出', channel: '通道', source: '来源索引',
+  correctStatus: '输出的每一行，都是同一个通道在四个时间点的值。',
+  reshapeStatus: 'reshape 按原来的存储顺序重新分组。输出的每一行混进了不同通道和时间点。',
+  caption: '数字用来标识元素，不是实测激活值。颜色跟随原始通道，小字标出来源。两种输出都是 [3, 4]，但只有 permute 交换了轴并保留其含义。',
+  nojs: 'JavaScript 未开启：当前展示正确的轴交换。',
+};
+const sourceRows = Array.from({ length: 4 }, (_, t) => Array.from({ length: 3 }, (_, c) => ({ t, c, value: t * 3 + c + 1 })));
+const outputRows = Array.from({ length: 3 }, (_, c) => Array.from({ length: 4 }, (_, t) => ({ t, c, value: t * 3 + c + 1 })));
+---
+
+<figure class="tensor-mapping" data-tensor-mapping data-correct-status={ui.correctStatus} data-reshape-status={ui.reshapeStatus}>
+  <div class="mode-controls" role="group" aria-label={ui.controls}>
+    <button type="button" data-mode="permute" aria-pressed="true" disabled>{ui.correct}</button>
+    <button type="button" data-mode="reshape" aria-pressed="false" disabled>{ui.reshape}</button>
+  </div>
+  <div class="matrix-pair">
+    <div class="matrix-panel">
+      <div class="matrix-heading"><span>{ui.input}</span><code>[T=4, C=3]</code></div>
+      <div class="matrix source-matrix" role="table" aria-label={`${ui.input}: T=4, C=3; ${ui.source}`}>
+        {sourceRows.map(row => <div class="matrix-row" role="row">{row.map(cell => <div class="token" data-channel={cell.c} role="cell"><b>{cell.value}</b><span>t{cell.t + 1} c{cell.c + 1}</span></div>)}</div>)}
+      </div>
+    </div>
+    <span class="direction" aria-hidden="true">→</span>
+    <div class="matrix-panel">
+      <div class="matrix-heading"><span>{ui.output}</span><code>[C=3, T=4]</code></div>
+      <div class="matrix output-matrix" role="table" aria-label={`${ui.output}: C=3, T=4; ${ui.source}`}>
+        {outputRows.map(row => <div class="matrix-row" role="row">{row.map(cell => <div class="token" data-output-cell data-channel={cell.c} role="cell"><b>{cell.value}</b><span>t{cell.t + 1} c{cell.c + 1}</span></div>)}</div>)}
+      </div>
+    </div>
+  </div>
+  <div class="channel-key" aria-label={ui.channel}>{[0, 1, 2].map(channel => <span><i data-channel={channel} aria-hidden="true"></i>C{channel + 1}</span>)}</div>
+  <p class="diagram-status" role="status" aria-live="polite" aria-atomic="true" data-mapping-status>{ui.correctStatus}</p>
+  <figcaption><span class="figure-title">{ui.title}</span> {ui.caption}</figcaption>
+  <noscript><p class="no-script">{ui.nojs}</p></noscript>
+</figure>
+
+<script>
+  document.querySelectorAll<HTMLElement>('[data-tensor-mapping]').forEach(root => {
+    const buttons = [...root.querySelectorAll<HTMLButtonElement>('[data-mode]')];
+    const cells = [...root.querySelectorAll<HTMLElement>('[data-output-cell]')];
+    const status = root.querySelector<HTMLElement>('[data-mapping-status]')!;
+    buttons.forEach(button => {
+      button.disabled = false;
+      button.addEventListener('click', () => {
+        const permute = button.dataset.mode === 'permute';
+        buttons.forEach(other => other.setAttribute('aria-pressed', String(other === button)));
+        cells.forEach((cell, i) => {
+          // Flattened output indices are [channel, time]; reshape never reorders storage.
+          const sourceIndex = permute ? (i % 4) * 3 + Math.floor(i / 4) : i;
+          const t = Math.floor(sourceIndex / 3);
+          const c = sourceIndex % 3;
+          cell.dataset.channel = String(c);
+          cell.querySelector('b')!.textContent = String(sourceIndex + 1);
+          cell.querySelector('span')!.textContent = `t${t + 1} c${c + 1}`;
+        });
+        status.textContent = (permute ? root.dataset.correctStatus : root.dataset.reshapeStatus) ?? '';
+      });
+    });
+  });
+</script>
+
+<style>
+  .tensor-mapping{--tm-ink:#262927;--tm-blue:#385b95;--tm-line:#d4dbdf;--tm-muted:#606b74;margin:32px 0;padding:24px;border:1px solid var(--tm-line);border-radius:6px;background:#f8f9fa;color:var(--tm-ink);font:inherit;line-height:1.6}
+  .diagram-heading{display:grid;gap:7px}.kind{font-size:11px;color:var(--tm-muted);letter-spacing:.025em}.diagram-title{font-size:18px;font-weight:600;line-height:1.5}
+  .mode-controls{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0 24px}.mode-controls button{border:1px solid var(--tm-line);border-radius:4px;padding:9px 12px;min-height:42px;background:transparent;color:var(--tm-muted);font:inherit;font-size:12px;line-height:1.5;cursor:pointer}.mode-controls button[aria-pressed="true"]{background:#e8edf4;border-color:#9aacc6;color:var(--tm-blue)}.mode-controls button:focus-visible{outline:2px solid var(--tm-blue);outline-offset:3px}.mode-controls button:disabled{cursor:default}
+  .matrix-pair{display:grid;grid-template-columns:minmax(0,3fr) 24px minmax(0,4fr);gap:16px;align-items:center}.matrix-panel{min-width:0;align-self:start}.matrix-heading{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px;margin-bottom:12px;font-size:12px}.matrix-heading code{font-size:11px;background:none;padding:0;color:var(--tm-muted)}.matrix{display:grid;gap:6px}.matrix-row{display:grid;gap:6px}.source-matrix .matrix-row{grid-template-columns:repeat(3,minmax(0,1fr))}.output-matrix .matrix-row{grid-template-columns:repeat(4,minmax(0,1fr))}.token{min-width:0;min-height:61px;padding:7px 2px;display:flex;flex-direction:column;align-items:center;justify-content:center;border:1px solid rgba(56,91,149,.12);border-radius:3px}.token b{font-size:16px;font-weight:600;font-variant-numeric:tabular-nums}.token span{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:9px;white-space:nowrap;color:#4d5966}.token[data-channel="0"],i[data-channel="0"]{background:#dce6f3}.token[data-channel="1"],i[data-channel="1"]{background:#deeae8}.token[data-channel="2"],i[data-channel="2"]{background:#e9e3ed}.direction{color:#8192a7;font-size:24px;text-align:center}.channel-key{display:flex;gap:18px;margin:17px 0;font-size:11px;color:var(--tm-muted)}.channel-key>span{display:flex;gap:6px;align-items:center}.channel-key i{width:11px;height:11px;border:1px solid rgba(56,91,149,.16);border-radius:2px}
+  .tensor-mapping .diagram-status{min-height:3.2em;margin:18px 0 0;padding-top:16px;border-top:1px solid var(--tm-line);font-size:13px;color:var(--tm-blue)}.tensor-mapping figcaption{font-size:12px;color:var(--tm-muted);margin:12px 0 0;line-height:1.75}.no-script{font-size:12px;color:var(--tm-muted)}
+  @media(max-width:560px){.tensor-mapping{padding:18px 14px}.matrix-pair{grid-template-columns:1fr;gap:14px}.matrix-panel{width:100%}.source-matrix{max-width:260px}.direction{line-height:1;transform:rotate(90deg);justify-self:center}.output-matrix{max-width:350px}.token{min-height:53px}.token span{font-size:10px}.diagram-title{font-size:16px}}
+</style>
