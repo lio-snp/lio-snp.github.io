@@ -29,15 +29,6 @@ function renderNews() {
 }
 
 function featuredImage(item) {
-  if (item.thumbnail?.kind === 'eventalign') return `
-    <div class="featured-thumbnail event-thumbnail" role="img" aria-label="${escapeHtml(item.imageAlt)}">
-      <img class="event-plot" src="${escapeHtml(item.thumbnail.plot)}" alt="" width="1650" height="574" />
-      <span class="event-wash" aria-hidden="true"></span>
-      <img class="event-monkey" src="${escapeHtml(item.thumbnail.subject)}" alt="" width="1275" height="1234" />
-      <span class="event-eyebrow" aria-hidden="true">EVENT EXPOSURE</span>
-      <strong class="event-hook" aria-hidden="true">1 DAY <span>vs</span><br />30 DAYS</strong>
-    </div>
-  `;
   if (item.thumbnail?.kind === 'gift') return `
     <div class="featured-thumbnail meme-thumbnail" role="img" aria-label="${escapeHtml(item.imageAlt)}">
       <img class="meme-plot" src="${escapeHtml(item.thumbnail.plot)}" alt="" width="2601" height="1881" />
@@ -72,7 +63,7 @@ function renderResearchPath() {
   const monthWidth = 48;
   const leftInset = 40;
   const axisY = 398;
-  const rows = { lending: 90, sme: 175, eventalign: 265, gift: 355, pairwise: 90 };
+  const rows = { lending: 90, sme: 175, gift: 355, pairwise: 90 };
   const dateForMonth = (month) => new Date(`${month}-01T00:00:00Z`);
   const origin = dateForMonth(data.researchPath[0].start);
   const today = new Date();

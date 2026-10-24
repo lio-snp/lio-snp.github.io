@@ -12,21 +12,6 @@ window.SITE_DATA = {
   ],
   featured: [
     {
-      id: 'eventalign',
-      title: 'EventAlign: Residual-Information Diagnostics for Sparse Textual and Event Records',
-      venue: 'Working paper, in revision',
-      authors: ['Yanlin Liu', 'Zhicheng Li'],
-      image: '/homepage/assets/eventalign.svg',
-      imageAlt: 'EventAlign local one-day and dense thirty-day exposure-window figure with a thinking monkey cutout',
-      thumbnail: {
-        kind: 'eventalign',
-        plot: '/homepage/assets/eventalign-exposure-windows.png',
-        subject: '/homepage/assets/eventalign-thinking-monkey.png'
-      },
-      href: '',
-      citation: '@misc{liu2026eventalign,\n  title={EventAlign: Residual-Information Diagnostics for Sparse Textual and Event Records},\n  author={Liu, Yanlin and Li, Zhicheng},\n  year={2026},\n  note={Working paper, in revision}\n}'
-    },
-    {
       id: 'gift',
       title: 'GIFT: LLM-Guided State-Reward Interface for Financial Reinforcement Learning',
       venue: 'Preprint, in revision · 2026',
@@ -45,7 +30,6 @@ window.SITE_DATA = {
   researchPath: [
     { id: 'lending', name: 'Lending Club', start: '2024-07', end: '2024-12', note: 'Part of my RA work at FIC.' },
     { id: 'sme', name: 'SME', start: '2025-01', end: null, note: 'I worked on satellite data and credit-risk prediction at FIC.' },
-    { id: 'eventalign', name: 'EventAlign', start: '2026-02', end: null, note: 'Why are the AUC gains so small?', from: ['lending', 'sme'] },
     { id: 'gift', name: 'GIFT', start: '2026-03', end: null, note: "Could LESR's approach help trading agents learn from fewer samples?" },
     { id: 'pairwise', name: 'Beyond Pairwise', start: '2026-05', end: '2026-07', note: 'I liked Physics of Language Models, then moved toward theory to fit my compute budget.' }
   ],
@@ -58,16 +42,6 @@ window.SITE_DATA = {
     }
   ],
   publications: [
-    {
-      id: 'eventalign',
-      title: 'EventAlign: Residual-Information Diagnostics for Sparse Textual and Event Records',
-      authors: 'Yanlin Liu, Zhicheng Li',
-      venue: 'Working paper, in revision',
-      year: 2026,
-      type: 'Working paper',
-      topics: ['Evaluation', 'Financial AI'],
-      href: ''
-    },
     {
       id: 'pairwise',
       title: 'Beyond Pairwise Statistics: Local Visibility Does Not Ensure Learning',
