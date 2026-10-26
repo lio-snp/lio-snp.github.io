@@ -16,3 +16,52 @@
 .header-actions{display:flex;align-items:center;gap:30px}.note-header .language-switch{gap:9px;border-left:1px solid var(--line);padding-left:24px;white-space:nowrap}.language-switch span{color:#a3adb6}.note-header .language-switch a[aria-current]{font-weight:600;text-decoration:none}html[lang="en"] .note-body{line-height:1.85;overflow-wrap:break-word}html[lang="en"] h1{line-height:1.2;letter-spacing:-.035em}html[lang="en"] .note-body h2{line-height:1.4}html[lang="en"] .note-body th{white-space:normal}html[lang="en"] .toc-rail a{line-height:1.55}
 @media(max-width:600px){.note-header{flex-wrap:wrap;gap:18px}.header-actions{gap:16px}.note-header .language-switch{padding-left:16px;gap:7px}}
 @media(max-width:380px){.note-header{align-items:flex-start}.header-actions{width:100%;justify-content:space-between}.note-header .language-switch{border-left:0;padding-left:0}}
+
+/* Research tables: grouped comparisons, readable ranges, and quiet horizontal rules. */
+.note-body .research-table { font-variant-numeric: tabular-nums lining-nums; }
+.note-body .research-table th,
+.note-body .research-table td { min-width: 96px; padding: 12px 14px; }
+.note-body .research-table thead th {
+  background: none;
+  color: var(--ink);
+  font-weight: 600;
+  white-space: normal;
+  vertical-align: bottom;
+  border-bottom: 1px solid #aeb3b7;
+}
+.note-body .research-table thead .column-group { text-align: center; }
+.note-body .research-table thead th[rowspan] { vertical-align: bottom; }
+.note-body .research-table tbody th {
+  background: none;
+  color: var(--ink);
+  font-weight: 400;
+  white-space: normal;
+  border-bottom: 1px solid var(--line);
+}
+.note-body .research-table tbody tr { background: none; }
+.note-body .research-table tbody tr:last-child th,
+.note-body .research-table tbody tr:last-child td { border-bottom: 0; }
+.note-body .research-table .metric-cell { text-align: right; }
+.note-body .research-table .metric-value { white-space: nowrap; }
+.note-body .research-table .metric-detail {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: .9em;
+  font-weight: 400;
+  white-space: nowrap;
+}
+.note-body .research-table .status-cell { min-width: 125px; }
+.note-body .research-table .row-group td {
+  padding-top: 18px;
+  padding-bottom: 6px;
+  color: var(--muted);
+  font-size: .9em;
+  border-top: 1px solid #aeb3b7;
+  border-bottom: 0;
+}
+.note-body .research-table .row-group:first-child td { padding-top: 10px; border-top: 0; }
+@media(max-width:480px) {
+  .note-body .research-table th,
+  .note-body .research-table td { padding: 11px 12px; }
+}

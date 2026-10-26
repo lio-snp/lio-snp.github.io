@@ -31,12 +31,7 @@ body.stitching-note {
 /* Horizontal rules and tabular figures, without shaded header bands. */
 .stitching-shell .table-scroll { margin: 30px 0; border-top: 1px solid #7e858b; border-bottom: 1px solid #7e858b; }
 .stitching-shell .note-body table { font-size: 14px; line-height: 1.65; }
-.stitching-shell .note-body th, .stitching-shell .note-body td { padding: 12px; min-width: 100px; }
-.stitching-shell .note-body th { background: none; color: var(--ink); font-weight: 400; border-bottom: 1px solid #aeb3b7; white-space: normal; }
-.stitching-shell .note-body td { border-bottom: 1px solid var(--line); }
-.stitching-shell .note-body th:first-child, .stitching-shell .note-body td:first-child { padding-left: 0; min-width: 165px; }
-.stitching-shell .note-body th:last-child, .stitching-shell .note-body td:last-child { padding-right: 0; }
-.stitching-shell .note-body tbody tr:nth-child(even) { background: none; }
+.stitching-shell .research-table tbody th[scope='row'] { min-width: 175px; }
 
 /* Open figures: controls above the drawing, title and caption below it. */
 .stitching-shell .note-body figure.results-plot,

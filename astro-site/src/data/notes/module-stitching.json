@@ -12,16 +12,16 @@
   "sections": [
     {
       "title": {
-        "zh": "1. Shape 对了，轴却接错了",
-        "en": "1. The shape fits. The axes do not."
+        "zh": "1. 张量形状与轴语义",
+        "en": "1. Tensor shape and axis semantics"
       },
       "setup": {
-        "zh": "张量能传进下一个模块时，每个元素还在预期的位置吗？我用一个位置分类器检查这个问题：输入有 batch、time、channel 三根轴，上下游对后两根轴的约定相反。我先训练并冻结分类器，再分别用 <code>permute</code> 和 <code>reshape</code> 接入输入。前者交换轴，后者重新分组元素，两者的输出形状相同。为了区分接口问题与学习能力，我还做了逆映射恢复和从头训练两个对照。",
-        "en": "When a tensor fits the next module, are its entries still where that module expects them? I use a position classifier to check this. The input has batch, time, and channel axes, and the upstream and downstream conventions swap the last two. After training and freezing the classifier, I connect the input using either <code>permute</code> or <code>reshape</code>. One exchanges axes; the other regroups entries. Both produce the same shape. I also restore the mapping and train from scratch to distinguish an interface mismatch from a limitation in what the classifier can learn."
+        "zh": "相同的输出形状，并不保证元素仍处于下游预期的位置。这个例子使用 batch、time、channel 三根轴，上下游对后两根轴的约定相反。位置分类器先训练再冻结，输入分别通过 <code>permute</code> 和 <code>reshape</code> 接入：前者交换轴，后者重新分组元素，两者产生相同形状。逆映射恢复检查已学位置约定能否恢复，从头训练则检查新布局本身是否可学。",
+        "en": "Matching output shapes do not guarantee that entries remain in the positions expected downstream. Here the input has batch, time, and channel axes, with upstream and downstream conventions swapping the last two. A position classifier is trained and frozen before receiving inputs through either <code>permute</code> or <code>reshape</code>: one exchanges axes; the other regroups entries. Both produce the same shape. Restoring the inverse mapping tests recovery of the learned convention, while training from scratch tests whether the new layout is learnable."
       },
       "takeaway": {
-        "zh": "在这个例子里，固定排列仍然可以学会，但冻结模型依赖训练时的轴约定。带编号的张量让我能直接看出接口改变了哪些位置；只看输出 shape 会漏掉这一点。",
-        "en": "The fixed permutation remains learnable in this example, while the frozen model depends on the axis convention used in training. Numbering the entries makes the changed positions visible; the output shape alone leaves that mismatch hidden."
+        "zh": "这里需要检查的是元素的对应关系。交互图中的编号使轴交换与元素重排的差别可见；输出 shape 本身无法区分这两种操作。",
+        "en": "The interface check concerns correspondence between entries. Numbering the entries in the interactive diagram makes the difference between exchanging axes and regrouping elements visible; output shape alone cannot distinguish the operations."
       },
       "id": "shape",
       "columns": [
@@ -1646,22 +1646,22 @@
         ]
       },
       "observation": {
-        "zh": "错误 reshape 后，冻结模型的准确率从 <strong>98.5% 降到 50.2%</strong>，恢复映射后准确率也恢复了。接着看从头训练的对照：同样的错误布局达到了 98.5%。这两个对照让我把性能下降定位到接口与已学位置约定的错配；分类器仍然能从头学习这个固定排列。",
-        "en": "With the wrong reshape, the frozen classifier’s accuracy falls from <strong>98.5% to 50.2%</strong>. Restoring the mapping restores its accuracy. The from-scratch control then reaches 98.5% with the same wrong layout. Together, these controls point to a mismatch with the position convention already learned by the frozen classifier. The classifier can still learn that fixed permutation from scratch."
+        "zh": "错误 reshape 后，冻结分类器的准确率从 <strong>98.5% 降到 50.2%</strong>；恢复映射后，准确率恢复。从头训练的分类器在相同错误布局上也达到 98.5%。性能下降因此对应于接口与冻结模型已学位置约定的错配，而非这个固定排列本身不可学习。",
+        "en": "With the wrong reshape, the frozen classifier’s accuracy falls from <strong>98.5% to 50.2%</strong>. Restoring the mapping restores accuracy. A classifier trained from scratch on the same wrong layout also reaches 98.5%. The drop therefore reflects a mismatch with the frozen model’s learned position convention, rather than an unlearnable fixed permutation."
       }
     },
     {
       "title": {
-        "zh": "2. 两个 loss，在争同一个位置",
-        "en": "2. Two losses, one shared slot"
+        "zh": "2. 辅助目标与共享表示",
+        "en": "2. Auxiliary objectives and shared representations"
       },
       "setup": {
-        "zh": "加入辅助任务后，如果主任务变差，是辅助梯度的影响，还是共享表示装不下两种信息？我用两个独立信号 <code>s</code> 和 <code>n</code> 来拆开这两个因素：主任务预测 <code>s</code>，辅助任务重建 <code>n</code>，两者尺度一致。共享层与输出头都为线性，共享表示先限制为一维。我改变辅助权重 λ，再分别让辅助梯度不进入共享层（detach）、把表示扩到二维。",
-        "en": "If an auxiliary task hurts the main task, is the issue its gradient or the amount of information the shared representation can hold? I use independent signals <code>s</code> and <code>n</code> to separate these factors. The main task predicts <code>s</code>; the auxiliary task reconstructs <code>n</code>, with matched target scales. The shared layer and both heads are linear, and the representation starts with one coordinate. I vary the auxiliary weight λ, then separately detach its gradient from the shared layer and expand the representation to two coordinates."
+        "zh": "辅助任务可能通过梯度改变共享表示，也可能暴露表示容量的限制。为区分两者，主任务预测独立信号 <code>s</code>，辅助任务重建 <code>n</code>，两个目标的尺度一致。共享层与输出头都为线性，共享表示先限制为一维。改变辅助权重 λ 后，再分别阻断辅助梯度进入共享层（detach）、把表示扩到二维。",
+        "en": "An auxiliary task can change a shared representation through its gradient or expose a limit in its capacity. To distinguish these effects, the main task predicts signal <code>s</code> and the auxiliary task reconstructs independent signal <code>n</code>, with matched target scales. The shared layer and both heads are linear, initially with a one-dimensional representation. Varying the auxiliary weight λ is followed by separate controls that detach its gradient from the shared layer or expand the representation to two coordinates."
       },
       "takeaway": {
-        "zh": "detach 与扩宽表示回答了不同的问题：前者阻断了辅助目标对共享层的梯度影响，后者给两个独立信号各留了一个方向。在这个线性案例里，共享表示的容量限制帮助解释了两项误差为什么此消彼长。",
-        "en": "Detaching and widening answer different questions: one blocks the auxiliary gradient from reaching the shared layer; the other gives each independent signal a direction of its own. In this linear case, the representation’s capacity helps explain the trade-off between the two errors."
+        "zh": "Detach 改变辅助目标能否更新共享层，扩宽则改变表示能否同时容纳两个独立方向。在这个线性案例中，前者恢复主任务但保留辅助误差，后者使两个信号都可保留，区分了梯度影响与容量限制。",
+        "en": "Detaching changes whether the auxiliary objective can update the shared layer; widening changes whether the representation can hold two independent directions. In this linear case, the first recovers the main task while leaving auxiliary error, whereas the second accommodates both signals, separating gradient influence from the capacity constraint."
       },
       "id": "objectives",
       "columns": [
@@ -7717,12 +7717,12 @@
     },
     {
       "title": {
-        "zh": "3. 模块没变大，更新却变猛了",
-        "en": "3. A small branch can make a large update"
+        "zh": "3. 输出尺度与稳定步长",
+        "en": "3. Output scale and stable step size"
       },
       "setup": {
-        "zh": "同一个分支，只改变输出尺度，原来的学习率还适用吗？我让新分支拟合一个残差：目标是 <code>x₀ + aᵀx</code>，预测是 <code>x₀ + g·wᵀx</code>，其中 x 有 16 维、a 固定，<code>w</code> 从零开始。把增益 <code>g</code> 从 1 改成 8，平方误差对 <code>w</code> 的曲率就增加到 64 倍。因此我比较保留原 SGD 学习率、LR 除以 64、仅 warmup 和仅梯度裁剪四种处理。",
-        "en": "Does the original learning rate still work if I change only a branch’s output scale? The branch fits a residual: the target is <code>x₀ + aᵀx</code> and the prediction is <code>x₀ + g·wᵀx</code>, with 16-dimensional x, fixed a, and <code>w</code> initialized to zero. Increasing the gain <code>g</code> from 1 to 8 multiplies the squared-loss curvature in <code>w</code> by 64. This gives a concrete comparison: keep the original SGD rate, divide it by 64, add warmup alone, or add gradient clipping alone."
+        "zh": "输出尺度会改变损失相对于参数的曲率，即使分支的参数数量不变。设目标为 <code>x₀ + aᵀx</code>，预测为 <code>x₀ + g·wᵀx</code>，其中 x 为 16 维、a 固定，<code>w</code> 从零开始。增益 <code>g</code> 从 1 增至 8，平方误差对 <code>w</code> 的曲率增加到 64 倍。因此，四组对照分别保留原 SGD 学习率、将 LR 除以 64、仅加入 warmup、仅加入梯度裁剪。",
+        "en": "Output scale changes loss curvature with respect to the parameters even when the parameter count stays fixed. The target is <code>x₀ + aᵀx</code> and the prediction is <code>x₀ + g·wᵀx</code>, with 16-dimensional x, fixed a, and <code>w</code> initialized to zero. Increasing gain <code>g</code> from 1 to 8 multiplies squared-loss curvature in <code>w</code> by 64. Four controls therefore keep the original SGD rate, divide LR by 64, add warmup alone, or add gradient clipping alone."
       },
       "takeaway": {
         "zh": "这里参数数量没有变化，稳定的 SGD 步长却随增益改变。warmup 延后了触发停止的时间，clipping 限制了梯度，但这两个设置都没有达到缩小 LR 的最终误差。这个比例关系来自当前平方误差模型与 SGD；换成 Adam，需要另做对照。",
@@ -12058,16 +12058,16 @@
     },
     {
       "title": {
-        "zh": "4. 拟合得更好，学到的是哪部分？",
-        "en": "4. A better fit to what?"
+        "zh": "4. 容量、标签噪声与评价指标",
+        "en": "4. Capacity, label noise, and evaluation metrics"
       },
       "setup": {
-        "zh": "我想看，在少量带错标的训练数据上，扩大模型会怎样改变训练与测试表现。我用 sklearn 的手写数字数据，在训练标签中固定加入 20% 噪声，测试标签保持干净。先比较同样 100 张训练图像上的小 MLP、宽 MLP，以及加入 dropout 和 weight decay 的宽 MLP；再把宽模型的训练样本增加到 500 张。这样可以分别观察模型宽度、组合正则和样本量的变化。",
-        "en": "I want to see how a wider model changes training and test performance when the training set is small and contains wrong labels. I use sklearn’s handwritten digits, fix 20% label noise in training, and keep test labels clean. First I compare a small MLP, a wide MLP, and a wide MLP with dropout and weight decay on the same 100 training images. I then give the wide model 500 images. These comparisons let me look separately at width, the combined regularization setting, and sample count."
+        "zh": "在小样本、含错标的数据上，训练拟合、测试准确率和测试 loss 可能给出不同结论。这个例子使用 sklearn 手写数字，在训练标签中固定加入 20% 噪声，测试标签保持干净。先在相同 100 张训练图像上比较小 MLP、宽 MLP、加入 dropout 和 weight decay 的宽 MLP，再把宽模型的训练样本增加到 500 张。对照分别改变宽度、组合正则设置和样本量。",
+        "en": "With a small, mislabeled training set, training fit, test accuracy, and test loss can give different accounts of performance. This example uses sklearn’s handwritten digits, fixes 20% label noise in training, and keeps test labels clean. A small MLP, a wide MLP, and a wide MLP with dropout and weight decay first use the same 100 training images; a further control gives the wide model 500 images. The comparisons vary width, the combined regularization setting, and sample count."
       },
       "takeaway": {
-        "zh": "小模型和宽模型都记住了这 100 张图像的训练标签，其中包括错标。干净测试集上的两个指标却给出不同排序：宽模型分类更准，正则后的宽模型 cross-entropy 更低。因此，这组结果需要分别从分类正确率和预测概率来理解。",
-        "en": "Both the small and wide models fit all 100 training labels, including the wrong ones. On the clean test set, the two metrics give different rankings: the wide model classifies more images correctly, while the regularized wide model has lower cross-entropy. I therefore read classification accuracy and the assigned probabilities as two parts of this result."
+        "zh": "小模型和宽模型都拟合了这 100 张图像的全部训练标签，包括错标。测试准确率衡量分类是否正确，cross-entropy 还取决于分配给正确类别的概率。因此，宽模型准确率更高、正则后模型 cross-entropy 更低，并不矛盾。",
+        "en": "Both the small and wide models fit all 100 training labels, including wrong labels. Test accuracy measures whether a classification is correct, while cross-entropy also depends on the probability assigned to the correct class. Higher accuracy for the wide model and lower cross-entropy for the regularized model are therefore compatible results."
       },
       "id": "capacity",
       "columns": [
@@ -15015,12 +15015,12 @@
     },
     {
       "title": {
-        "zh": "5. 前面的层，真的收到信号了吗？",
-        "en": "5. Did the early layers get a signal?"
+        "zh": "5. 深度与梯度传播",
+        "en": "5. Depth and gradient propagation"
       },
       "setup": {
-        "zh": "网络加深后，梯度传到前面还剩多少？我搭了一条带收缩初始化的 tanh 网络，比较 2 层和 20 层，再加入残差、LayerNorm，以及两者组合。先测初始化时逐层的激活与梯度 RMS，再用相同更新次数做短训练。我关心的是：梯度沿层传播的变化，是否与训练后的误差对应。这里的收缩初始化是为了把这一现象放大到可观察的程度。",
-        "en": "How much gradient reaches the early layers as the network gets deeper? I build a tanh network with contractive initialization and compare depths of 2 and 20, then add residual connections, LayerNorm, or both. I measure layerwise activation and gradient RMS at initialization, followed by short training with the same number of updates. I want to compare the gradient profile with the final error. The contractive initialization makes this effect easier to observe."
+        "zh": "连续的收缩变换会减弱传向早期层的梯度。这里使用带收缩初始化的 tanh 网络，比较 2 层和 20 层，再分别加入残差、LayerNorm、两者组合。先记录初始化时逐层激活与梯度的 RMS，再以相同更新次数做短训练，将初始梯度分布与最终误差并列比较。收缩初始化是用于放大该现象的构造条件。",
+        "en": "Repeated contractive transformations can attenuate gradients reaching earlier layers. The example uses a tanh network with contractive initialization, compares depths of 2 and 20, and adds residual connections, LayerNorm, or both. Layerwise activation and gradient RMS are recorded at initialization, followed by short training with the same number of updates. This compares the initial gradient profile with final error. Contractive initialization is a constructed condition that amplifies the effect."
       },
       "takeaway": {
         "zh": "在这条收缩网络里，plain 版本前端的激活梯度很小，训练后误差也较高。残差和 LayerNorm 都改变了梯度分布并降低了误差，但初始梯度最大或同时加上两者的版本，并没有取得最低误差。逐层梯度提供了诊断线索，最终训练表现还需要一起看。",
@@ -18813,22 +18813,22 @@
         ]
       },
       "observation": {
-        "zh": "20 层 plain 网络的最终测试 MSE 为 <strong>0.976</strong>，单加残差后为 4.41e-04。LayerNorm 也降低了误差，两者组合的误差仍高于单加残差。为了看信号如何传到前面的层，我记录的是激活梯度 <code>∂L/∂h</code>；h₀ 是输入投影后的隐状态。下面的梯度图按前向层位置排列，反传方向从右往左，可以与后面的训练曲线一起看。",
-        "en": "The 20-layer plain network ends at test MSE <strong>0.976</strong>; adding residual connections gives 4.41e-04. LayerNorm also lowers error, while the combined setting has higher error than residual connections alone. To follow the signal reaching earlier layers, I record activation gradients <code>∂L/∂h</code>, with h₀ denoting the hidden state after the input projection. The gradient plot follows forward layer positions, so backpropagation runs right to left. It can be read alongside the training curves below."
+        "zh": "20 层 plain 网络的最终测试 MSE 为 <strong>0.976</strong>，单加残差后为 4.41e-04。LayerNorm 也降低误差，但两者组合仍高于单加残差。图中记录激活梯度 <code>∂L/∂h</code>，其中 h₀ 是输入投影后的隐状态。横轴按前向层位置排列，因此反传方向从右往左；梯度分布可与后面的训练曲线对照。",
+        "en": "The 20-layer plain network ends at test MSE <strong>0.976</strong>; residual connections alone give 4.41e-04. LayerNorm also lowers error, but the combined setting remains above residual connections alone. The plot records activation gradients <code>∂L/∂h</code>, with h₀ denoting the hidden state after the input projection. Its horizontal axis follows forward layer positions, so backpropagation runs right to left. The gradient profile can be compared with the training curves below."
       }
     },
     {
       "title": {
-        "zh": "6. 是融合太晚，还是信息已经没了？",
-        "en": "6. Too late to fuse, or too little left?"
+        "zh": "6. 融合顺序与信息保留",
+        "en": "6. Fusion order and retained information"
       },
       "setup": {
-        "zh": "融合位置的变化，可能也改变了送进 head 的信息。我用两路平衡的 ±1 序列检查这一点：第二路等于第一路，或者正好相反，任务是区分这两种关系。两路各自的均值都是 0，因此我比较逐位置融合后取平均、各自取平均后融合。再分别扩宽晚融合 head、补入交叉统计量 <code>mean(x·z)</code>，看容量和输入信息的变化各有什么影响。",
-        "en": "Changing the fusion point may also change what information reaches the head. I check this with two balanced ±1 streams: the second equals the first or its negative, and the task is to distinguish the two relationships. Both streams have mean zero. I compare position-wise fusion before averaging with separate averaging before fusion, then separately widen the late-fusion head and add the cross-statistic <code>mean(x·z)</code>. This separates a change in head capacity from a change in its input information."
+        "zh": "融合顺序决定汇总前是否保留了跨流关系。设两路输入都是平衡的 ±1 序列，第二路等于第一路或其相反数，任务是区分这两种关系。由于两路均值都为 0，对照比较逐位置融合后取平均、分别取平均后融合，再分别扩宽晚融合 head、补入交叉统计量 <code>mean(x·z)</code>。扩宽改变容量，补入统计量则改变 head 能获得的信息。",
+        "en": "Fusion order determines whether a cross-stream relationship survives summarization. Both inputs are balanced ±1 sequences; the second equals the first or its negative, and the task distinguishes these relationships. Each stream has mean 0. The controls compare position-wise fusion before averaging with separate averaging before fusion, then separately widen the late-fusion head or add the cross-statistic <code>mean(x·z)</code>. Widening changes capacity; supplying the statistic changes the information available to the head."
       },
       "takeaway": {
-        "zh": "在这个任务里，分别取平均把两种关系都变成了 (0, 0)，扩宽 head 后输入仍然相同。补入平均乘积后，两类重新可以区分。这让我把融合顺序的问题具体化为：汇总之后，任务所需的关系还在不在？",
-        "en": "For this task, separate averaging turns both relationships into (0, 0); widening the head leaves those inputs identical. Adding the mean product makes the classes distinguishable again. This gives me a more concrete question about fusion order: does the summary retain the relationship the task asks for?"
+        "zh": "分别取平均把两种关系都映射为 (0, 0)，因此任何只接收这两个均值的 head 都无法区分类别。补入平均乘积后，两类再次可分。这里的差别来自汇总是否保留任务所需的关系，而不只是融合模块的大小。",
+        "en": "Separate averaging maps both relationships to (0, 0), so a head receiving only those means cannot distinguish the classes. Adding the mean product makes the classes separable again. The relevant difference is whether summarization retains the relationship required by the task, beyond the size of the fusion module."
       },
       "id": "fusion",
       "columns": [

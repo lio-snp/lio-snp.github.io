@@ -17,7 +17,40 @@ const base = preview ? '/demos/notes/module-stitching/' : canonicalBase;
 const englishUrl = preview ? `${base}en/` : base;
 const chineseUrl = preview ? base : `${base}zh/`;
 const title = en ? 'The modules fit. Why didn’t the model improve?' : '模块接上了，为什么没变好？';
-const toc = [{id:'setup', title: en ? 'Setup' : '先把问题缩小'}, ...report.sections.map(s => ({id:s.id,title:t(s.title)})), {id:'takeaways',title:'Takeaways'}];
+const toc = [{id:'setup', title: en ? 'Setup' : '实验设置'}, ...report.sections.map(s => ({id:s.id,title:t(s.title)})), {id:'takeaways',title:en ? 'Scope' : '适用范围'}];
+type HeaderGroup = { label: string; columns?: string[] };
+const tableHeaders: Record<string, HeaderGroup[]> = {
+  objectives: [
+    { label: en ? 'Condition' : '条件' },
+    { label: en ? 'Test MSE ↓' : '测试 MSE ↓', columns: en ? ['Main task', 'Auxiliary task'] : ['主任务', '辅助任务'] },
+  ],
+  capacity: [
+    { label: en ? 'Condition' : '条件' },
+    { label: en ? 'Parameters' : '参数量' },
+    { label: en ? 'Training · noisy labels' : '训练 · 含错标', columns: en ? ['Accuracy ↑'] : ['准确率 ↑'] },
+    { label: en ? 'Evaluation · clean labels' : '测试 · 干净标签', columns: en ? ['Accuracy ↑', 'Cross-entropy ↓'] : ['准确率 ↑', 'Cross-entropy ↓'] },
+  ],
+  gradient: [
+    { label: en ? 'Condition' : '条件' },
+    { label: en ? 'At initialization' : '初始化时', columns: ['RMS(∂L/∂h₀)'] },
+    { label: en ? 'After training' : '训练后', columns: en ? ['Test MSE ↓'] : ['测试 MSE ↓'] },
+  ],
+};
+const rowGroups: Record<string, Record<number, string>> = {
+  objectives: { 0: en ? 'Objective-weight sweep · width 1' : '辅助目标权重对照 · 一维瓶颈', 4: en ? 'Interventions at λ = 4' : 'λ = 4 下的干预' },
+  capacity: { 0: en ? '100 training images' : '100 张训练图像', 3: en ? '500 training images · larger data budget' : '500 张训练图像 · 更多训练数据' },
+  gradient: { 0: en ? 'Shallow reference' : '浅层参考', 1: en ? '20-layer comparisons' : '20 层对照' },
+};
+// Emphasis follows the contrasts discussed in the text, rather than a global ranking.
+const focalCells: Record<string, string[]> = {
+  shape: ['1:1', '2:1'], objectives: ['3:1', '3:2', '5:1', '5:2'],
+  capacity: ['1:3', '1:4', '2:4'], gradient: ['1:2', '2:2'], fusion: ['0:1', '1:1'],
+};
+const numericColumn = (id: string, column: number) => column > 0 && (id !== 'scale' || column === 2);
+const valueParts = (value: string) => {
+  const match = value.match(/^(.*?)\s+(\[[^\]]+\])$/);
+  return match ? { main: match[1], range: match[2] } : { main: value, range: '' };
+};
 ---
 <!doctype html>
 <html lang={en ? 'en' : 'zh-CN'}>
@@ -56,13 +89,13 @@ const toc = [{id:'setup', title: en ? 'Setup' : '先把问题缩小'}, ...report
             <div class="eyebrow"><span>Notes</span>{preview && <span class="demo-label">{en ? 'Draft' : '草稿'}</span>}</div>
             <h1>{title}</h1>
             <div class="article-meta"><span>Yanlin Liu</span><time datetime="2026-10-13">{en ? '13 Oct 2026' : '2026 年 10 月 13 日'}</time><span>{en ? 'Experiment notes' : '实验笔记'}</span></div>
-            <p class="intro">{en ? 'I came across a post listing six reasons why combining modules can fail. I wanted to connect each point to something observable: what changes at the interface, in the objective, or during training? I use small controlled examples below to look at those changes and compare a few proposed fixes.' : '我看到一个帖子，列了六种模块缝合容易失败的情况。我想把这些经验对应到能观察的变化上：接口、训练目标或训练过程里，具体发生了什么？下面用几组小对照记录这些变化，也比较几种补救设置的效果。'}</p>
+            <p class="intro">{en ? 'Combining modules changes more than the architecture: interfaces carry coordinate conventions, objectives compete for shared representations, and output scales affect optimization. Six small controlled experiments examine these changes and the conditions under which proposed fixes help.' : '组合模块会同时改变接口的坐标约定、共享表示承载的信息和优化过程中的更新尺度。下面用六组小型对照实验，分别检查这些变化，以及常见补救设置在什么条件下有效。'}</p>
           </header>
           <nav class="section-index prose" aria-label={en ? 'Article sections' : '文章目录'}>{toc.map(s => <a href={`#${s.id}`}>{s.title}</a>)}</nav>
           <div class="note-body">
-            <h2 id="setup">{en ? 'Setup' : '先把问题缩小'}</h2>
-            <p>{en ? 'I keep the models and tasks small so the comparisons are easier to interpret. Five cases use synthetic data; the capacity case uses handwritten digits. Each condition runs with seeds 17, 29, and 43, with shared data and initialization where the architecture permits.' : '为了更容易区分几种变化，我把模型和任务都设得较小。五组用合成数据，容量实验用手写数字。每个配置都运行种子 17、29、43；结构允许时，对照共享数据与初始化。'}</p>
-            <p>{en ? `The experiments ran on ${report.hardware}. Tables show the mean and minimum–maximum range across the three seeds. Curves show recorded measurements; the two interactive diagrams let me trace tensor entries and calculate sequence relationships directly.` : `实验在 ${report.hardware} 上运行。表格给出三个种子的均值与最小—最大值，曲线展示实测记录。两块交互图分别用来追踪张量元素、直接计算序列关系。`}</p>
+            <h2 id="setup">{en ? 'Setup' : '实验设置'}</h2>
+            <p>{en ? 'Small models and tasks make individual changes easier to isolate. Five cases use synthetic data; the capacity case uses handwritten digits. Each condition runs with seeds 17, 29, and 43, with shared data and initialization where the architecture permits.' : '小模型与简单任务便于隔离单项变化。五组使用合成数据，容量实验使用手写数字。每个配置运行种子 17、29、43；结构允许时，对照共享数据与初始化。'}</p>
+            <p>{en ? `The experiments ran on ${report.hardware}. Tables show the mean and minimum–maximum range across the three seeds; bold values highlight contrasts discussed in the text. Curves show recorded measurements; the two interactive diagrams trace tensor entries and calculate sequence relationships directly.` : `实验在 ${report.hardware} 上运行。表格给出三个种子的均值与最小—最大值，粗体标出正文讨论的对照值；曲线展示实测记录。两块交互图分别用来追踪张量元素、直接计算序列关系。`}</p>
             <p class="lede"><strong>TL;DR</strong> {t(report.tldr)}</p>
             {report.sections.map(section => <section aria-labelledby={section.id}>
               <h2 id={section.id}>{t(section.title)}</h2>
@@ -70,18 +103,35 @@ const toc = [{id:'setup', title: en ? 'Setup' : '先把问题缩小'}, ...report
               {section.id === 'shape' && <TensorMapping locale={locale} />}
               {section.id === 'fusion' && <FusionOrder locale={locale} />}
               <div class="table-scroll" role="region" tabindex="0" aria-label={`${t(section.title)} ${en ? 'results' : '实验结果'}`}>
-                <table><thead><tr>{section.columns.map(c => <th>{t(c)}</th>)}</tr></thead><tbody>
-                  {section.rows.map(row => <tr>{row.map(cell => <td>{typeof cell === 'string' ? cell : t(cell)}</td>)}</tr>)}
+                <table class="research-table">
+                  {tableHeaders[section.id]?.map(group => <colgroup span={group.columns?.length ?? 1}></colgroup>)}
+                  <thead>
+                    {tableHeaders[section.id] ? <>
+                      <tr>{tableHeaders[section.id].map(group => <th scope={group.columns ? 'colgroup' : 'col'} rowspan={group.columns ? undefined : 2} colspan={group.columns?.length} class={group.columns ? 'column-group' : undefined}>{group.label}</th>)}</tr>
+                      <tr>{tableHeaders[section.id].flatMap(group => group.columns ?? []).map(label => <th scope="col" class="metric-cell">{label.replace(/ ([↑↓])/g, '\u00a0$1')}</th>)}</tr>
+                    </> : <tr>{section.columns.map((column, index) => <th scope="col" class={numericColumn(section.id, index) ? 'metric-cell' : undefined}>{t(column)}</th>)}</tr>}
+                  </thead><tbody>
+                  {section.rows.map((row, rowIndex) => <>
+                    {rowGroups[section.id]?.[rowIndex] && <tr class="row-group"><td colspan={section.columns.length}>{rowGroups[section.id][rowIndex]}</td></tr>}
+                    <tr>{row.map((cell, columnIndex) => {
+                      const value = typeof cell === 'string' ? cell : t(cell);
+                      const parts = valueParts(value);
+                      const focal = focalCells[section.id]?.includes(`${rowIndex}:${columnIndex}`);
+                      return columnIndex === 0 ? <th scope="row">{value}</th> : <td class={numericColumn(section.id, columnIndex) ? 'metric-cell' : 'status-cell'}>
+                        {focal ? <strong class="metric-value">{parts.main}</strong> : <span class="metric-value">{parts.main}</span>}
+                        {parts.range && <span class="metric-detail">{parts.range}</span>}
+                      </td>;
+                    })}</tr>
+                  </>)}
                 </tbody></table>
               </div>
               <p set:html={t(section.observation)} />
               {'gradientResults' in section && section.gradientResults && <ResultsPlot caseData={section.gradientResults} locale={locale} xLabel={en ? 'Layer position' : '层位置'} defaultLog />}
               <ResultsPlot caseData={section.results} locale={locale} defaultLog={section.id === 'scale'} />
-              <p class="lede"><strong>Takeaway.</strong> <span set:html={t(section.takeaway)} /></p>
+              <p set:html={t(section.takeaway)} />
             </section>)}
-            <h2 id="takeaways">Takeaways</h2>
-            <p>{en ? 'Returning to the question in the title, a module can fit while several other things change: the coordinates the next layer expects, the information it receives, or the scale of an update. The controls help me tell these changes apart. They also leave different outcomes to consider: restoring a mapping recovers accuracy, a wider representation accommodates both targets, and the small-data models rank differently under accuracy and loss.' : '回到标题里的问题，模块接上以后，下游预期的位置、收到的信息、一次更新的尺度，都可能发生变化。这几组对照让我能把它们分开看：恢复映射后准确率恢复，扩宽表示后两个目标可以同时拟合，而小样本模型在准确率和 loss 下的排序不同。'}</p>
-            <p>{en ? 'These are short runs on small models, with conditions chosen to make particular effects visible. Applying the same questions to a project would mean checking them under its own data, optimizer, and initialization.' : '这里用了小模型和短训练，部分设置是为了让现象更容易观察。放到具体项目里，还需要结合它的数据、优化器和初始化检查这些问题。'}</p>
+            <h2 id="takeaways">{en ? 'Scope' : '适用范围'}</h2>
+            <p>{en ? 'These short runs isolate specific effects rather than compare general-purpose architectures. Their interpretation depends on the constructed data, initialization, optimizer, and training budget. In particular, the scale result concerns SGD, the capacity experiment combines two regularizers, and the fusion variants use different amounts of computation. These conditions limit which conclusions transfer to a larger project.' : '这些短训练用于隔离具体效应，并非通用架构的性能比较。结果依赖于构造数据、初始化、优化器与训练预算。其中，尺度实验针对 SGD，容量实验同时使用两种正则，融合版本的计算量不同。这些条件决定了哪些结论可以迁移到更大的项目。'}</p>
             <h3>{en ? 'Reading that informed the checks' : '相关阅读'}</h3>
             <ul class="references">
               <li><a href="https://xhslink.cn/o/Adte32LztK4">{en ? 'The six-point post that prompted this note' : '最初看到的六条经验帖'}</a></li>
@@ -111,7 +161,3 @@ const toc = [{id:'setup', title: en ? 'Setup' : '先把问题缩小'}, ...report
     </script>
   </body>
 </html>
-
-<style>
-  .note-body td:not(:first-child){white-space:nowrap}
-</style>

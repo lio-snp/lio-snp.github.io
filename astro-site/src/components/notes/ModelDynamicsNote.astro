@@ -18,11 +18,11 @@ const englishWithFigures = english.replace(/<!-- FIGURE:(\d+) -->/g, (_, index) 
   return `<figure><button class="figure-zoom" type="button" aria-label="Enlarge figure: ${label}"><img src="${image.src}" alt="${label}" width="${image.width}" height="${image.height}" loading="lazy" decoding="async"></button><figcaption>${label} · Click to enlarge</figcaption></figure>`;
 });
 let tableNumber = 0;
-const content = isEnglish ? englishWithFigures.replace(/<table>[\s\S]*?<\/table>/g, table => `<div class="table-scroll" role="region" tabindex="0" aria-label="Data table ${++tableNumber}; scroll horizontally if needed">${table}</div>`) : chinese;
+const content = isEnglish ? englishWithFigures.replace(/<table\b[^>]*>[\s\S]*?<\/table>/g, table => `<div class="table-scroll" role="region" tabindex="0" aria-label="Data table ${++tableNumber}; scroll horizontally if needed">${table}</div>`) : chinese;
 const toc = [...content.matchAll(/<h2 id="([^"]+)">(.*?)<\/h2>/g)].map(match => ({ id: match[1], title: match[2] }));
 const title = isEnglish ? 'Representation drift depends on the reference point' : '表征漂移的参照系陷阱';
-const subtitle = isEnglish ? 'Following 154 Pythia-1B checkpoints to ask whether the model has stopped changing' : '用 154 个快照看 Pythia-1B 到底有没有“停下来”';
-const intro = isEnglish ? "An experiment note on representation change in Pythia-1B. I started by asking whether the model was still changing late in training, then found that my choice of reference point and metric changed how I read the curves. These are the observations, the debugging steps, and the questions I still have." : note.intro;
+const subtitle = isEnglish ? 'Comparing directional alignment, local displacement, and sample relationships across 154 Pythia-1B checkpoints' : '比较 Pythia-1B 的 154 个快照中的方向对齐、局部位移与样本关系';
+const intro = isEnglish ? "An experiment note on how reference points and metrics describe different aspects of representation change. The comparisons cover loss, local displacement, CKA, and linear probes, including an unusual interval near step 116k." : "一篇关于参照点与指标如何描述表征变化的实验笔记，比较 loss、局部位移、CKA 与线性探针，并检查 step 116k 附近的异常区间。";
 const ui = isEnglish ? {
   skip: 'Skip to article', home: 'Yanlin Liu home', siteNav: 'Site navigation', kind: 'Experiment notes', contents: 'Contents', sections: 'sections', mobileToc: 'Article contents (mobile)', toc: 'Article contents', back: 'Back to top ↑', figures: 'figures · Click to enlarge', dialog: 'Enlarged experiment figure', close: 'Close image', closeText: 'Close ×', original: 'Open original ↗'
 } : {
