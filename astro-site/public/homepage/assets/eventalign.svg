@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 282" role="img" aria-labelledby="title desc">
+  <title id="title">EventAlign research illustration</title>
+  <desc id="desc">Sparse text and event records pass through an alignment choice and change an evaluation result.</desc>
+  <defs>
+    <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#f4f8fc"/><stop offset="1" stop-color="#e9f0f7"/></linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#59729b" flood-opacity=".1"/></filter>
+  </defs>
+  <rect width="640" height="282" fill="url(#bg)"/>
+  <path d="M0 35h640M0 70h640M0 105h640M0 140h640M0 175h640M0 210h640M0 245h640M35 0v282M70 0v282M105 0v282M140 0v282M175 0v282M210 0v282M245 0v282M280 0v282M315 0v282M350 0v282M385 0v282M420 0v282M455 0v282M490 0v282M525 0v282M560 0v282M595 0v282" stroke="#dce7f2" stroke-width=".6" opacity=".65"/>
+  <g font-family="Arial,Helvetica,sans-serif" fill="#253d5b">
+    <text x="36" y="38" font-size="13" font-weight="700" letter-spacing="2">EVENTALIGN</text>
+    <text x="36" y="55" font-size="10" fill="#66809f">Sparse records · alignment choices · evaluation</text>
+  </g>
+  <g filter="url(#shadow)" font-family="Arial,Helvetica,sans-serif">
+    <rect x="38" y="89" width="151" height="142" rx="12" fill="#fff" stroke="#d8e3ef"/>
+    <text x="54" y="113" font-size="11" font-weight="700" fill="#4a668b">TEXT RECORDS</text>
+    <rect x="54" y="128" width="112" height="8" rx="4" fill="#cddcec"/>
+    <rect x="54" y="144" width="86" height="8" rx="4" fill="#dfe9f1"/>
+    <rect x="54" y="160" width="105" height="8" rx="4" fill="#dfe9f1"/>
+    <circle cx="70" cy="197" r="7" fill="#6587b2"/>
+    <circle cx="105" cy="197" r="7" fill="#c5d4e5"/>
+    <circle cx="140" cy="197" r="7" fill="#6587b2"/>
+    <rect x="245" y="99" width="151" height="122" rx="12" fill="#fff" stroke="#d8e3ef"/>
+    <text x="261" y="123" font-size="11" font-weight="700" fill="#4a668b">EVENT WINDOW</text>
+    <path d="M263 181h115" stroke="#c9d6e4" stroke-width="2"/>
+    <circle cx="280" cy="181" r="7" fill="#9db4d0"/>
+    <circle cx="320" cy="181" r="7" fill="#476b9f"/>
+    <circle cx="363" cy="181" r="7" fill="#9db4d0"/>
+    <path d="M280 154v20M320 139v35M363 158v16" stroke="#82a0c4" stroke-width="2"/>
+    <rect x="452" y="89" width="151" height="142" rx="12" fill="#fff" stroke="#d8e3ef"/>
+    <text x="469" y="113" font-size="11" font-weight="700" fill="#4a668b">MODEL AUDIT</text>
+    <path d="M472 192h109M472 154v38" stroke="#c6d4e4" stroke-width="2"/>
+    <path d="m478 178 25-19 24 13 24-31 26 16" fill="none" stroke="#577ead" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="551" cy="141" r="5" fill="#577ead"/>
+  </g>
+  <g fill="none" stroke="#7998be" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M196 161h38m-8-7 8 7-8 7M403 161h38m-8-7 8 7-8 7"/>
+  </g>
+</svg>
