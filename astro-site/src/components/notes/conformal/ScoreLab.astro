@@ -1,0 +1,276 @@
+---
+import katex from 'katex';
+import {
+  calibration, defaultTarget, defaults, evaluate, extent, metricValues, options,
+  plot, plotX, plotY, presets, test,
+} from './score-lab';
+
+interface Props { locale?: 'en' | 'zh' }
+const { locale = 'en' } = Astro.props;
+const zh = locale === 'zh';
+const groups = ['marginal', 'transform', 'aggregate'] as const;
+const ui = zh ? {
+  title: '分数函数实验',
+  settings: '分数函数设置',
+  presets: '预设实验',
+  reset: '重置',
+  coverage: '目标覆盖率',
+  plotTitle: '二维预测残差',
+  plotDescription: '蓝色轮廓围住预测区域。蓝点是已覆盖的测试残差，红褐色点是未覆盖的残差。',
+  region: '预测区域',
+  covered: '已覆盖',
+  uncovered: '未覆盖',
+  metricsLabel: '校准和测试指标',
+  clipping: '区域超出坐标轴范围。显示的面积只包含图内部分。',
+  formula: '当前分数函数和预测区域',
+  caption: `每个点代表一个测试残差向量，共 ${test.length} 个。阈值用独立的 ${calibration.length} 个校准向量计算。坐标轴固定在 ±${extent} 个残差单位，面积用 720 条射线构成的多边形近似。`,
+  noScript: '请启用 JavaScript 来切换分数函数。上图显示默认设置的结果。',
+  areaUnit: '平方单位',
+  metrics: { target: '目标联合覆盖率', test: '测试覆盖率', area: '区域面积（近似）', threshold: '分数阈值 q' },
+  labels: { marginal: '边际处理', transform: '变换', aggregate: '聚合' },
+} : {
+  title: 'Conformal Score Function Lab',
+  settings: 'Score function settings',
+  presets: 'Guided experiments',
+  reset: 'Reset',
+  coverage: 'Target coverage',
+  plotTitle: 'Two-dimensional forecast residuals',
+  plotDescription: 'The blue outline encloses the accepted region. Blue points are covered test residuals and rust points are uncovered.',
+  region: 'Accepted region',
+  covered: 'Covered',
+  uncovered: 'Uncovered',
+  metricsLabel: 'Calibration and test metrics',
+  clipping: 'Region reaches the plotting bounds. Area includes only the portion inside the axes.',
+  formula: 'Active score function and acceptance region',
+  caption: `Each dot is one of ${test.length} test residual vectors. Thresholds use ${calibration.length} separate calibration vectors. Axes stay fixed at ±${extent} residual units. Area uses a 720-ray polygon approximation in those coordinates.`,
+  noScript: 'Enable JavaScript to change the score function. The default result is shown above.',
+  areaUnit: 'units²',
+  metrics: { target: 'Target joint coverage', test: 'Test coverage', area: 'Region area (approx.)', threshold: 'Score threshold q' },
+  labels: { marginal: 'Marginal', transform: 'Transform', aggregate: 'Aggregate' },
+};
+const translatedOptions: Record<string, string> = {
+  identity: '恒等变换', linear: '线性变换', monotonic: '单调变换', shear: '可逆非线性变换',
+  max: '最大值', density: '直接使用密度',
+};
+const translatedPresets = ['A · 方形', 'B · 圆形', 'C · 椭圆'];
+const initial = evaluate(defaults, defaultTarget);
+const values = metricValues(defaultTarget, initial, ui.areaUnit);
+const ticks = [-6, -4, -2, 0, 2, 4, 6];
+const math = (tex: string) => katex.renderToString(tex);
+const formulas = (option: { tex: string; detail?: string; parameters?: string }) =>
+  [option.tex, option.detail, option.parameters].filter((line): line is string => Boolean(line));
+---
+<figure class="score-lab" data-score-lab data-area-unit={ui.areaUnit} aria-labelledby="score-lab-title">
+  <h3 id="score-lab-title">{ui.title}</h3>
+  <form data-controls aria-label={ui.settings}>
+    <fieldset disabled>
+      <div class="presets" aria-label={ui.presets}>
+        {presets.map(({name}, index) => <button type="button" data-preset={index}>{zh ? translatedPresets[index] : name}</button>)}
+        <button class="reset" type="reset">{ui.reset}</button>
+      </div>
+      <div class="knobs">
+        {groups.map(group => (
+          <label>
+            {ui.labels[group]}
+            <select name={group}>
+              {Object.entries(options[group]).map(([key, option]) => (
+                <option value={key} selected={defaults[group] === key}>{zh ? (translatedOptions[key] ?? option.label) : option.label}</option>
+              ))}
+            </select>
+          </label>
+        ))}
+      </div>
+      <label class="coverage">
+        <span>{ui.coverage} <output data-slider-label>{defaultTarget}%</output></span>
+        <input name="coverage" type="range" min="75" max="99" step="1" value={defaultTarget} aria-valuetext="90%" />
+      </label>
+    </fieldset>
+  </form>
+
+  <div class="result">
+    <div class="plot">
+      <svg viewBox={`0 0 ${plot.width} ${plot.height}`} role="img" aria-labelledby="score-plot-title score-plot-description">
+        <title id="score-plot-title">{ui.plotTitle}</title>
+        <desc id="score-plot-description">{ui.plotDescription}</desc>
+        <defs><clipPath id="score-plot-clip"><rect x={plot.left} y={plot.top} width={plot.size} height={plot.size} /></clipPath></defs>
+        <g class="grid">
+          {ticks.map(tick => (
+            <g class:list={[{zero: tick === 0}]}>
+              <line x1={plotX(tick)} x2={plotX(tick)} y1={plot.top} y2={plotY(-extent)} />
+              <line x1={plot.left} x2={plotX(extent)} y1={plotY(tick)} y2={plotY(tick)} />
+            </g>
+          ))}
+        </g>
+        <g clip-path="url(#score-plot-clip)">
+          <path data-boundary class="boundary" d={initial.path} />
+          {test.map(([x, y], index) => (
+            <circle data-point data-covered={String(initial.covered[index])} cx={plotX(x)} cy={plotY(y)} r="2" />
+          ))}
+        </g>
+        <path class="axes" d={`M${plot.left} ${plot.top} V${plotY(-extent)} H${plotX(extent)}`} />
+        <g class="ticks">
+          {ticks.map(tick => (
+            <g>
+              <line x1={plotX(tick)} x2={plotX(tick)} y1={plotY(-extent)} y2={plotY(-extent) + 4} />
+              <text x={plotX(tick)} y={plotY(-extent) + 17} text-anchor="middle">{tick}</text>
+              <line x1={plot.left - 4} x2={plot.left} y1={plotY(tick)} y2={plotY(tick)} />
+              <text x={plot.left - 8} y={plotY(tick) + 4} text-anchor="end">{tick}</text>
+            </g>
+          ))}
+        </g>
+        <text class="axis-label" x={plotX(0)} y={plot.height - 7} text-anchor="middle">r₁</text>
+        <text class="axis-label" x="12" y={plotY(0)} text-anchor="middle" transform={`rotate(-90 12 ${plotY(0)})`}>r₂</text>
+      </svg>
+      <div class="legend">
+        <span><i class="swatch" aria-hidden="true"></i>{ui.region}</span>
+        <span><i class="dot" aria-hidden="true"></i>{ui.covered}</span>
+        <span><i class="dot outside" aria-hidden="true"></i>{ui.uncovered}</span>
+      </div>
+    </div>
+
+    <div class="readout">
+      <dl aria-label={ui.metricsLabel}>
+        {(Object.keys(ui.metrics) as (keyof typeof ui.metrics)[]).map(key => (
+          <div><dt>{ui.metrics[key]}</dt><dd data-metric={key}>{values[key]}</dd></div>
+        ))}
+      </dl>
+      <p class="clip-note" data-clipping role="status" hidden={!initial.clipped}>{ui.clipping}</p>
+      <div class="formula" aria-label={ui.formula}>
+        {groups.map(group => Object.entries(options[group]).map(([key, option]) => (
+          <div data-equation={group} data-option={key} hidden={defaults[group] !== key}>
+            {formulas(option).map(line => <div class="math-line" set:html={math(line)} />)}
+          </div>
+        )))}
+        <div class="math-line" set:html={math(String.raw`\mathcal R_q=\{\mathbf r:s(\mathbf r)\le q\}`)} />
+      </div>
+    </div>
+  </div>
+  <figcaption>{ui.caption}</figcaption>
+  <noscript><p>{ui.noScript}</p></noscript>
+</figure>
+
+<script>
+  import { evaluate, metricValues, presets, type Knobs } from './score-lab';
+
+  document.querySelectorAll<HTMLElement>('[data-score-lab]').forEach(lab => {
+    const controls = lab.querySelector<HTMLFormElement>('[data-controls]')!;
+    const fields = controls.querySelector<HTMLFieldSetElement>('fieldset')!;
+    const marginal = controls.querySelector<HTMLSelectElement>('[name=marginal]')!;
+    const transform = controls.querySelector<HTMLSelectElement>('[name=transform]')!;
+    const aggregate = controls.querySelector<HTMLSelectElement>('[name=aggregate]')!;
+    const coverage = controls.querySelector<HTMLInputElement>('[name=coverage]')!;
+    const sliderLabel = lab.querySelector<HTMLOutputElement>('[data-slider-label]')!;
+    const points = lab.querySelectorAll<SVGCircleElement>('[data-point]');
+    const equations = lab.querySelectorAll<HTMLElement>('[data-equation]');
+    const metricNodes = lab.querySelectorAll<HTMLElement>('[data-metric]');
+    const clipNote = lab.querySelector<HTMLElement>('[data-clipping]')!;
+    const boundary = lab.querySelector<SVGPathElement>('[data-boundary]')!;
+
+    function update() {
+      const knobs = {
+        marginal: marginal.value,
+        transform: transform.value,
+        aggregate: aggregate.value,
+      } as Knobs;
+      const target = coverage.valueAsNumber;
+      const result = evaluate(knobs, target);
+      const values = metricValues(target, result, lab.dataset.areaUnit);
+
+      sliderLabel.value = values.target;
+      coverage.setAttribute('aria-valuetext', values.target);
+      boundary.setAttribute('d', result.path);
+      points.forEach((point, index) => { point.dataset.covered = String(result.covered[index]); });
+      metricNodes.forEach(node => { node.textContent = values[node.dataset.metric as keyof typeof values]; });
+      equations.forEach(node => { node.hidden = node.dataset.option !== knobs[node.dataset.equation as keyof Knobs]; });
+      clipNote.hidden = !result.clipped;
+    }
+
+    let renderFrame = 0;
+    function scheduleUpdate() {
+      cancelAnimationFrame(renderFrame);
+      renderFrame = requestAnimationFrame(update);
+    }
+
+    controls.addEventListener('input', scheduleUpdate);
+    controls.addEventListener('reset', scheduleUpdate);
+    controls.querySelectorAll<HTMLButtonElement>('[data-preset]').forEach((button, index) => {
+      button.addEventListener('click', () => {
+        const knobs = presets[index].knobs;
+        marginal.value = knobs.marginal;
+        transform.value = knobs.transform;
+        aggregate.value = knobs.aggregate;
+        scheduleUpdate();
+      });
+    });
+    // A history restore may preserve select values across navigations.
+    window.addEventListener('pageshow', scheduleUpdate);
+    fields.disabled = false;
+  });
+</script>
+
+<style>
+  .score-lab {
+    --plot-blue: #385b95;
+    --plot-red: #a45b59;
+    --plot-axis: #747b82;
+    --plot-grid: #e0e2e3;
+    font-family: 'DM Sans', system-ui, sans-serif;
+    font-size: .875rem;
+    line-height: 1.5;
+    padding-block: 20px;
+    border-block: 1px solid var(--line);
+  }
+  .score-lab h3 { margin: 0 0 15px; font-size: 1rem; }
+  fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+  .presets { display: flex; flex-wrap: wrap; gap: 7px; }
+  button, select {
+    border: 1px solid #cdd4da;
+    border-radius: 4px;
+    color: var(--ink);
+    background: transparent;
+    font: inherit;
+    min-height: 35px;
+  }
+  button { cursor: pointer; padding: 4px 10px; }
+  button:hover { color: var(--accent); border-color: var(--accent); }
+  .reset { margin-left: auto; color: var(--accent); }
+  .knobs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-block: 15px; }
+  label { display: grid; gap: 5px; color: var(--muted); font-size: .82rem; }
+  select { width: 100%; padding: 4px 7px; }
+  select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .coverage { max-width: 340px; }
+  .coverage span { display: flex; justify-content: space-between; }
+  input { width: 100%; margin: 0; min-height: 28px; accent-color: var(--accent); }
+  output { color: var(--ink); font-variant-numeric: tabular-nums; }
+  .result { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); align-items: start; gap: 18px; margin-top: 18px; }
+  svg { width: 100%; height: auto; display: block; fill: var(--ink); }
+  .ticks { font-size: 11px; fill: var(--muted); }
+  .ticks line, .axes { fill: none; stroke: var(--plot-axis); stroke-width: .75; }
+  .grid { stroke: var(--plot-grid); stroke-width: .6; }
+  .grid .zero { stroke: #cdd4da; }
+  .axis-label { font: italic 15px Georgia, serif; }
+  .boundary { fill: var(--plot-blue); fill-opacity: .09; stroke: var(--plot-blue); stroke-width: 1.45; }
+  circle { fill: var(--plot-blue); opacity: .68; }
+  circle[data-covered=false] { fill: var(--plot-red); opacity: .92; }
+  .legend { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 3px 13px; font-size: .75rem; color: var(--muted); }
+  .legend span { display: inline-flex; gap: 5px; align-items: center; }
+  .swatch { width: 11px; height: 8px; border: 1px solid var(--plot-blue); background: #385b9517; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--plot-blue); }
+  .dot.outside { background: var(--plot-red); }
+  dl { margin: 4px 0 16px; font-size: .77rem; }
+  dl div { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+  dt { color: var(--muted); }
+  dd { margin: 0; white-space: nowrap; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .clip-note { color: #884b40; font-size: .78rem; }
+  .formula { font-size: .81rem; }
+  .math-line { min-width: 0; overflow-x: auto; padding-block: 3px; }
+  .score-lab figcaption { margin: 13px 0 0; }
+  @media (max-width: 630px) {
+    .result { grid-template-columns: minmax(0, 1fr); }
+    .plot { max-width: 440px; width: 100%; margin-inline: auto; }
+  }
+  @media (max-width: 420px) {
+    .knobs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .reset { margin-left: 0; }
+  }
+</style>

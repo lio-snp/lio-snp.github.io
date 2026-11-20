@@ -1,0 +1,103 @@
+---
+import Favicons from '@/components/Favicons.astro';
+import Analytics from '@/components/Analytics.astro';
+import EnglishArticle, { getHeadings as getEnglishHeadings } from '@/data/notes/conformal-score-geometry.mdx';
+import ChineseArticle, { getHeadings as getChineseHeadings } from '@/data/notes/conformal-score-geometry.zh.mdx';
+import { title, summary, date, dateLabel, href, zhHref, zhTitle, zhSummary } from '@/data/notes/conformal-score-geometry';
+import '@/styles/notes.css';
+import 'katex/dist/katex.min.css';
+
+interface Props { locale: 'en' | 'zh' }
+const { locale } = Astro.props;
+const zh = locale === 'zh';
+const Article = zh ? ChineseArticle : EnglishArticle;
+const englishHeadings = getEnglishHeadings();
+const chineseHeadings = getChineseHeadings();
+const sections = zh ? chineseHeadings : englishHeadings;
+const alternate = zh ? englishHeadings : chineseHeadings;
+const pageTitle = zh ? zhTitle : title;
+const noteLabel = zh ? '笔记' : 'Notes';
+---
+<!doctype html>
+<html lang={zh ? 'zh-CN' : 'en'}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={zh ? zhSummary : summary} />
+    <link rel="canonical" href={new URL(zh ? zhHref : href, Astro.site)} />
+    <link rel="alternate" hreflang="en" href={new URL(href, Astro.site)} />
+    <link rel="alternate" hreflang="zh-CN" href={new URL(zhHref, Astro.site)} />
+    <link rel="alternate" hreflang="x-default" href={new URL(href, Astro.site)} />
+    <title>{pageTitle} · Yanlin Liu</title>
+    <Favicons />
+    <Analytics />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  </head>
+  <body id="top">
+    <a class="skip-link" href="#article">{zh ? '跳至正文' : 'Skip to article'}</a>
+    <div class="note-shell">
+      <header class="note-header">
+        <a class="wordmark" href="/">Yanlin Liu<span aria-hidden="true">.</span></a>
+        <div class="header-actions">
+          <nav aria-label={zh ? '网站导航' : 'Site navigation'}>
+            <a href="/#about">{zh ? '关于' : 'About'}</a>
+            <a href="/#featured">{zh ? '研究' : 'Research'}</a>
+            <a href="/#notes">{noteLabel}</a>
+          </nav>
+          <nav class="language-switch" aria-label={zh ? '语言' : 'Language'}>
+            <a href={href} lang="en" aria-current={!zh ? 'page' : undefined} data-alternate-language={zh ? '' : undefined}>EN</a>
+            <span aria-hidden="true">/</span>
+            <a href={zhHref} lang="zh-CN" aria-current={zh ? 'page' : undefined} data-alternate-language={!zh ? '' : undefined}>中文</a>
+          </nav>
+        </div>
+      </header>
+      <main class="reading-layout">
+        <article id="article">
+          <header class="article-header">
+            <div class="eyebrow">{noteLabel}</div>
+            <h1>{pageTitle}</h1>
+            <div class="article-meta"><span>Yanlin Liu</span><time datetime={date}>{zh ? '2026 年 11 月 20 日' : dateLabel}</time><span>{zh ? '共形预测' : 'Conformal prediction'}</span></div>
+          </header>
+          <nav class="section-index" aria-label={zh ? '文章目录' : 'Article sections'}>
+            {sections.map(({slug, text}, index) => <a href={`#${slug}`} data-alternate-section={alternate[index]?.slug}>{text}</a>)}
+          </nav>
+          <div class="note-body"><Article /></div>
+          <a class="back-top" href="#top">{zh ? '回到顶部 ↑' : 'Back to top ↑'}</a>
+        </article>
+      </main>
+      <footer class="note-footer"><a href="/">← Yanlin Liu</a><span>{noteLabel}</span></footer>
+    </div>
+    <script>
+      const headings = [...document.querySelectorAll<HTMLElement>('.note-body h2')];
+      const sectionLinks = [...document.querySelectorAll<HTMLAnchorElement>('.section-index a')];
+      const languageLink = document.querySelector<HTMLAnchorElement>('[data-alternate-language]');
+      languageLink?.addEventListener('click', () => {
+        const visibleIndex = headings.findLastIndex(heading => heading.getBoundingClientRect().top <= 150);
+        const anchoredIndex = sectionLinks.findIndex(link => link.hash === window.location.hash);
+        const index = visibleIndex >= 0 ? visibleIndex : anchoredIndex;
+        const url = new URL(languageLink.href);
+        url.hash = sectionLinks[index]?.dataset.alternateSection ?? '';
+        languageLink.href = url.href;
+      });
+    </script>
+  </body>
+</html>
+<style>
+  html { background: #fcfcfb; --paper: #fcfcfb; --line: #e0e2e3; --muted: #606b74; }
+  .reading-layout { display: block; max-width: 760px; margin-inline: auto; }
+  .article-header { border-bottom: 1px solid var(--line); }
+  h1, .note-body { font-family: Georgia, 'Times New Roman', 'Songti SC', 'Noto Serif CJK SC', serif; }
+  h1 { font-weight: 400; font-size: clamp(29px, 4.5vw, 36px); }
+  .section-index { display: flex; flex-wrap: wrap; gap: 7px 20px; padding: 16px 0; margin-bottom: 29px; font-size: 12px; }
+  .section-index a { color: var(--muted); }
+  .section-index a:hover { color: var(--accent); }
+  .note-body { font-size: 18px; }
+  .note-body :global(h2) { font-weight: 400; font-size: 22px; }
+  .note-body :global(.katex-display) { overflow-x: auto; padding-block: 5px; font-size: .94em; }
+  @media (max-width: 600px) {
+    .reading-layout { padding-top: 34px; }
+    .note-body { font-size: 17px; }
+  }
+</style>

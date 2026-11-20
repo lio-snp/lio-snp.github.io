@@ -1,0 +1,18 @@
+---
+import { title, summary, date, dateLabel, href } from '@/data/notes/conformal-score-geometry';
+---
+<article class="research-note-card" data-post-card data-tags="Conformal prediction,Forecasting">
+  <p class="note-meta"><time datetime={date}>{dateLabel}</time><span> · Conformal prediction · Forecasting</span></p>
+  <h3><a href={href}>{title} <span aria-hidden="true">↗</span></a></h3>
+  <p>{summary}</p>
+  <a class="read-note" href={href}>Read note →</a>
+</article>
+<style>
+  .research-note-card { padding: 24px 0; border-block: 1px solid #d4dbdf; max-width: 900px; }
+  .note-meta { font-size: 12px; color: #606b74; margin: 0 0 12px; }
+  h3 { font-size: clamp(18px, 2vw, 23px); line-height: 1.5; font-weight: 600; margin: 0 0 12px; letter-spacing: -.02em; }
+  h3 a { color: #385b95; text-decoration: none; }
+  h3 a:hover { text-decoration: underline; text-underline-offset: 4px; }
+  p:not(.note-meta) { font-size: 15px; line-height: 1.8; color: #606b74; margin: 0; max-width: 78ch; }
+  .read-note { display: inline-block; margin-top: 18px; font-size: 13px; color: #385b95; }
+</style>

@@ -1,0 +1,60 @@
+import ScoreLab from '@/components/notes/conformal/ScoreLab.astro';
+
+## TL;DR
+
+A conformal score function assigns a single number to a vector of forecast errors. (With multiple outputs, comparing errors coordinate by coordinate gives only a partial order, so a scalar score lets us rank the vectors.) Its level sets determine the possible shapes of the prediction region, and calibration picks the cutoff. In the same two-hour forecasting example, three score functions produce a square, a circle, and an ellipse. At the same target coverage, they can enclose different areas.
+
+## A two-step forecast
+
+Suppose a pretrained model takes the last 24 hours of electricity demand and forecasts the next two. The forecast is $\hat{\mathbf y}_t=(\hat y_{t+1},\hat y_{t+2})$. Once the two observations arrive, we can write their errors as a single vector:
+
+$$
+\mathbf r_t = \mathbf y_t-\hat{\mathbf y}_t=(r_1,r_2).
+$$
+
+We want a region that covers **both** errors together with at least 90% probability. Should it be a square, a circle, or something else? A **nonconformity score function** $s$ maps the two forecast errors to one number, the **score** $s(\mathbf r)$. The region includes every residual whose score is at most the calibrated cutoff $q$:
+
+$$
+\mathcal R_q=\{\mathbf r\in\mathbb R^2:s(\mathbf r)\le q\},
+\qquad
+\mathcal C_t=\hat{\mathbf y}_t+\mathcal R_q.
+$$
+
+The plot uses residual coordinates. Adding the point forecast translates the region into demand coordinates. The curve is a level set of the chosen score. It need not follow the density of the residuals.
+
+## Designing a Score Function
+
+$$
+\mathbf r \xrightarrow{\mathrm{Marginal}} \mathbf u
+\xrightarrow{\mathrm{Transform}} \mathbf z
+\xrightarrow{\mathrm{Aggregate}} s(\mathbf r).
+$$
+
+**Marginal.** Start with each error's magnitude. Dividing by a fixed scale $a_j$ keeps the noisier horizon from dominating by virtue of its units or typical error size. The lab also offers $F_j(r)=\operatorname{asinh}(r/a_j)$, which grows more slowly for large errors.
+
+**Transform.** Keep the two coordinates, mix them linearly, or warp them. The lab includes a coordinatewise quadratic and an invertible nonlinear shear. All options act on absolute magnitudes. Once we fold away the signs, linear mixing cannot recover an arbitrary rotation of signed errors or a full Mahalanobis ellipse.
+
+**Aggregate.** Take the largest component, the Euclidean norm, or the negative log of a fixed two-Gaussian mixture density on $\mathbf z$. The mixture is a toy score with no fitted parameters. Its level sets can have a different shape from either norm's.
+
+## How scores shape prediction regions
+
+Start with **A · Square** and switch to **B · Circle**. With Max, both absolute errors must stay within the same cutoff. With $L_2$, a larger error on one horizon can fit if the other is smaller. The same points are now shown against a circle. Next, try **C · Ellipse**. It keeps $L_2$ and divides the errors by $(a_1,a_2)=(2,1)$, giving an axis-aligned ellipse with semi-axes $2q$ and $q$. All three use the identity transform.
+
+<ScoreLab />
+
+The lab simulates independent residual vectors with correlated coordinates and unequal scales. It uses 350 vectors to calibrate and 160 separate vectors to measure coverage. The electricity forecast is illustrative. For every setting, sort the calibration scores and take the $k$th smallest, using $q=\infty$ if $k>n$:
+
+$$
+k=\lceil(n+1)(1-\alpha)\rceil,\qquad
+\Pr(\mathbf r_{\rm new}\in\mathcal R_q)\ge 1-\alpha.
+$$
+
+The inequality is the split-conformal guarantee for a fixed score with exchangeable calibration and new vectors. It averages over calibration draws and future vectors. Test coverage is the fraction covered in this particular simulation. See [Angelopoulos and Bates on split conformal prediction](https://arxiv.org/abs/2107.07511).
+
+## Coverage is not the whole story
+
+Compare the presets at 90%. Each score function gets its own calibrated cutoff, so both shape and size can change. Similar test coverage can come with different areas. A smaller region can be preferable at valid coverage, but area alone says little about coverage for a specific subgroup or under distribution shift. The density option illustrates more flexible geometry. Estimating such a score from data would require a separate fitting split.
+
+## Takeaways
+
+The score function defines the level sets. Calibration chooses one of them. Marginal processing, transformation, and aggregation are three ways to design the function in this lab. With rolling time-series forecasts, overlapping windows or changing error distributions can break the exchangeability used here.
